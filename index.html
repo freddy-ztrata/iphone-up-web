@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iPhone UP — Tu iPhone, siempre UP</title>
+<meta name="description" content="iPhones del 11 al 17 — sellados y seminuevos 100% originales, garantía 6 meses. Tienda física en Providencia: Padre Mariano 98, Oficina 105." />
+<meta property="og:title" content="iPhone UP — Tu iPhone, siempre UP" />
+<meta property="og:description" content="iPhones del 11 al 17 — sellados y seminuevos 100% originales, garantía 6 meses." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/logo.jpg" />
+<link rel="icon" href="assets/logo-mark.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============== NAV ============== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo" aria-label="iPhone UP — Inicio">
+      <img src="assets/logo-trimmed.png" alt="iPhone UP" />
+    </a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="#catalogo">Catálogo</a>
+      <a href="#trade-in">Vende tu iPhone</a>
+      <a href="#tienda">Tienda</a>
+      <a href="#faq">Soporte</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-ig" href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" aria-label="Instagram iPhone UP">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+          <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+        </svg>
+      </a>
+      <a class="btn-phone" href="tel:+56900000000">+56 9 0000 0000</a>
+      <button id="cart-button" class="btn-cart" aria-label="Abrir carro">
+        CARRO <span id="cart-count" class="badge">0</span>
+      </button>
+      <button id="nav-burger" class="nav-burger" aria-label="Abrir menú">☰</button>
+    </div>
+  </div>
+  <div id="nav-drawer" class="nav-drawer" aria-label="Menú móvil">
+    <a href="#catalogo">Catálogo</a>
+    <a href="#trade-in">Vende tu iPhone</a>
+    <a href="#tienda">Tienda</a>
+    <a href="#faq">Soporte</a>
+    <a href="tel:+56900000000">+56 9 0000 0000</a>
+    <a href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener">Instagram @iphoneup.cl</a>
+  </div>
+</header>
+
+<!-- ============== HERO ============== -->
+<section class="hero">
+  <svg class="neon-waves" viewBox="0 0 1200 800" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="aw" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#A4E83A" stop-opacity="0" />
+        <stop offset="50%" stop-color="#A4E83A" stop-opacity="0.7" />
+        <stop offset="100%" stop-color="#A4E83A" stop-opacity="0" />
+      </linearGradient>
+    </defs>
+    <g id="wave-paths"></g>
+  </svg>
+  <div class="hero-inner">
+    <div>
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        Tienda física en Providencia
+      </div>
+      <h1>
+        Tu iPhone,<br>
+        <span class="accent">siempre UP.</span>
+      </h1>
+      <p class="hero-sub">
+        iPhones del 11 al 17 — sellados y seminuevos 100% originales, probados y garantizados por 6 meses.
+        Atención presencial, garantía real, confianza demostrada.
+      </p>
+      <div class="hero-cta">
+        <a href="#catalogo" class="btn-primary">Explorar catálogo →</a>
+        <a href="#trade-in" class="btn-secondary">Vende tu iPhone</a>
+      </div>
+      <div id="hero-stats" class="hero-stats"></div>
+    </div>
+    <div class="hero-img">
+      <div class="hero-img-glow"></div>
+      <img src="assets/iphones/iphone-17-pro-max.png" alt="iPhone 17 Pro Max" />
+      <div class="hero-tag">iPhone 17 Pro Max · DISPONIBLE</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== TRUST STRIP ============== -->
+<div class="trust">
+  <div class="trust-inner">
+    <div class="trust-item"><span class="trust-icon">✓</span><span class="trust-text">Equipos 100% originales</span></div>
+    <div class="trust-item"><span class="trust-icon">🛡</span><span class="trust-text">Garantía 6 meses</span></div>
+    <div class="trust-item"><span class="trust-icon">↻</span><span class="trust-text">Recibimos tu iPhone</span></div>
+    <div class="trust-item"><span class="trust-icon">⚡</span><span class="trust-text">Servicio técnico propio</span></div>
+    <div class="trust-item"><span class="trust-icon">🚚</span><span class="trust-text">Envío a todo Chile</span></div>
+  </div>
+</div>
+
+<!-- ============== CATALOG ============== -->
+<section id="catalogo" class="catalog">
+  <div class="catalog-inner">
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">· Catálogo completo</div>
+        <h2 class="section-h">Del 11 al 17.<br><span class="muted">Encuentra el tuyo.</span></h2>
+      </div>
+      <div id="catalog-filters" class="filter-bar" role="tablist" aria-label="Filtro de generación">
+        <button class="filter-pill active" data-filter="all">Todos</button>
+        <button class="filter-pill" data-filter="new">Nuevos (15-17)</button>
+        <button class="filter-pill" data-filter="classic">Clásicos (11-14)</button>
+      </div>
+    </div>
+    <div id="catalog-grid" class="catalog-grid"></div>
+  </div>
+</section>
+
+<!-- ============== TRADE-IN ============== -->
+<section id="trade-in" class="trade">
+  <div class="trade-inner">
+    <div class="trade-left">
+      <div class="eyebrow">· Compramos tu iPhone</div>
+      <h2>Pasa al<br>siguiente nivel.</h2>
+      <p>
+        Entrega tu iPhone actual y descuéntalo del próximo. Cotización en línea, evaluación final en tienda.
+        Te ofrecemos el mejor precio del mercado, sin vueltas.
+      </p>
+      <ul class="trade-list">
+        <li><span class="check">✓</span>Cotización en 60 segundos</li>
+        <li><span class="check">✓</span>Evaluación gratis en tienda</li>
+        <li><span class="check">✓</span>Pago al instante o como abono</li>
+      </ul>
+    </div>
+    <div class="trade-card">
+      <div id="trade-progress" class="trade-progress"></div>
+      <div id="trade-step-label" class="trade-step-label">Paso 1 de 3</div>
+      <div id="trade-step"></div>
+      <div class="trade-actions">
+        <button id="trade-back" class="btn-back">Atrás</button>
+        <button id="trade-next" class="btn-next">Continuar →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== PAYMENTS ============== -->
+<section class="payments">
+  <div class="payments-inner">
+    <div>
+      <div class="eyebrow">· Métodos de pago</div>
+      <div class="payments-h">Paga como prefieras. Hasta 12x sin interés.</div>
+    </div>
+    <div class="payments-list">
+      <div class="payment"><div class="payment-icon">⇄</div><div class="payment-name">Transferencia</div></div>
+      <div class="payment"><div class="payment-icon">$</div><div class="payment-name">Efectivo</div></div>
+      <div class="payment"><div class="payment-icon">▭</div><div class="payment-name">Débito</div></div>
+      <div class="payment"><div class="payment-icon">▣</div><div class="payment-name">Crédito</div></div>
+      <div class="payment"><div class="payment-icon">▼</div><div class="payment-name">PágaloAsí</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== STORE ============== -->
+<section id="tienda" class="store">
+  <div class="store-inner">
+    <div class="store-card">
+      <svg class="neon-waves" viewBox="0 0 1200 800" preserveAspectRatio="none" aria-hidden="true" style="opacity:.3">
+        <g>
+          <path d="M -100 100 Q 300 50, 600 200 T 1300 150" stroke="rgba(255,255,255,0.08)" stroke-width="0.6" fill="none"/>
+          <path d="M -100 220 Q 300 170, 600 340 T 1300 290" stroke="url(#aw)" stroke-width="1.2" fill="none"/>
+          <path d="M -100 360 Q 300 310, 600 480 T 1300 430" stroke="rgba(255,255,255,0.08)" stroke-width="0.6" fill="none"/>
+          <path d="M -100 500 Q 300 450, 600 620 T 1300 570" stroke="url(#aw)" stroke-width="1.2" fill="none"/>
+        </g>
+      </svg>
+      <div class="store-card-inner">
+        <div class="eyebrow">· Visítanos</div>
+        <h2>Tienda física<br><span style="color:var(--accent)">en Providencia.</span></h2>
+        <div class="store-info">
+          <div class="store-info-label">📍 DIRECCIÓN</div>
+          <div class="store-info-text">Padre Mariano 98, Oficina 105</div>
+          <div class="store-info-sub">Providencia, Santiago</div>
+        </div>
+        <div class="store-info">
+          <div class="store-info-label">🕐 HORARIO</div>
+          <div class="store-hours">
+            <span class="day">Lunes a Viernes</span><span class="h">10:00 — 19:00</span>
+            <span class="day">Sábado</span><span class="h">10:00 — 14:00</span>
+            <span class="day">Domingo</span><span class="closed">Cerrado</span>
+          </div>
+        </div>
+        <div class="store-cta">
+          <a class="btn-square primary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=Padre+Mariano+98,+Oficina+105,+Providencia,+Santiago">Cómo llegar</a>
+          <a class="btn-square ghost" target="_blank" rel="noopener" href="https://wa.me/56900000000?text=Hola%20iPhone%20UP">WhatsApp</a>
+        </div>
+      </div>
+    </div>
+    <div class="store-map" aria-hidden="true">
+      <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+        <rect width="600" height="600" fill="#0d100a" />
+        <g id="grid"></g>
+        <path d="M 0 280 Q 200 270, 600 290" stroke="rgba(255,255,255,0.15)" stroke-width="3" fill="none" />
+        <path d="M 0 380 Q 300 360, 600 400" stroke="rgba(255,255,255,0.1)" stroke-width="2" fill="none" />
+        <path d="M 280 0 Q 270 200, 290 600" stroke="rgba(255,255,255,0.1)" stroke-width="2" fill="none" />
+        <path d="M 100 0 Q 110 300, 90 600" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" fill="none" />
+        <path d="M 450 0 Q 460 300, 440 600" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" fill="none" />
+        <g transform="translate(300, 285)">
+          <circle r="60" fill="rgba(164,232,58,0.13)">
+            <animate attributeName="r" values="40;80;40" dur="2.5s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.6;0;0.6" dur="2.5s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="14" fill="#A4E83A" />
+          <path d="M -8 -2 L 0 -22 L 8 -2 Z" fill="#A4E83A" />
+        </g>
+        <text x="300" y="340" text-anchor="middle" fill="#A4E83A" font-size="14" font-weight="800" letter-spacing="2">iPhone UP</text>
+        <text x="300" y="358" text-anchor="middle" fill="#888" font-size="11">Padre Mariano 98, Oficina 105</text>
+      </svg>
+      <div class="store-map-tag">PROVIDENCIA · STGO</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== TESTIMONIALS ============== -->
+<section class="testi">
+  <div class="testi-inner">
+    <div class="testi-header">
+      <div class="eyebrow">· Confianza real</div>
+      <h2 class="testi-h">+5.000 clientes <span class="accent">UP</span>.</h2>
+    </div>
+    <div id="testi-grid" class="testi-grid"></div>
+  </div>
+</section>
+
+<!-- ============== FAQ ============== -->
+<section id="faq" class="faq">
+  <div class="faq-inner">
+    <div class="faq-header">
+      <div class="eyebrow">· Preguntas frecuentes</div>
+      <h2 class="faq-h">Resolvemos tus dudas.</h2>
+    </div>
+    <div id="faq-list" class="faq-list"></div>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="nav-logo footer-logo">
+          <img src="assets/logo-trimmed.png" alt="iPhone UP" />
+        </a>
+        <p>Tu iPhone, siempre UP. iPhones del 11 al 17 — sellados y seminuevos, garantía real, atención experta.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" class="social-link" aria-label="Instagram iPhone UP">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+            </svg>
+            <span>@iphoneup.cl</span>
+          </a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Catálogo</div>
+        <ul>
+          <li><a href="product.html?id=17">iPhone 17</a></li>
+          <li><a href="product.html?id=16">iPhone 16</a></li>
+          <li><a href="product.html?id=15">iPhone 15</a></li>
+          <li><a href="#catalogo">Ver todos</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Servicios</div>
+        <ul>
+          <li><a href="#trade-in">Compramos tu iPhone</a></li>
+          <li><a href="#">Servicio técnico</a></li>
+          <li><a href="#trade-in">Parte de pago</a></li>
+          <li><a href="#faq">Garantía</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Tienda</div>
+        <ul>
+          <li><a href="#tienda">Padre Mariano 98, Of. 105</a></li>
+          <li><a href="https://wa.me/56900000000" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="tel:+56900000000">+56 9 0000 0000</a></li>
+          <li><a href="mailto:contacto@iphoneup.cl">contacto@iphoneup.cl</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© <span id="footer-year"></span> iPhone UP · Providencia, Chile · Todos los derechos reservados.</div>
+      <div>iPhone UP no está afiliado con Apple Inc.</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============== WHATSAPP FAB ============== -->
+<a class="whatsapp" href="https://wa.me/56900000000?text=Hola%20iPhone%20UP" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zM6.597 20.13c1.676.995 3.276 1.591 5.444 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.926-.607zM17.51 14.382c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
+  </svg>
+</a>
+
+<!-- ============== CART DRAWER ============== -->
+<div id="cart-overlay" class="cart-overlay" role="dialog" aria-label="Carro" aria-modal="true">
+  <div class="cart-drawer">
+    <div class="cart-head">
+      <h3>Tu carro</h3>
+      <button id="cart-close" class="cart-close" aria-label="Cerrar carro">×</button>
+    </div>
+    <div id="cart-list"></div>
+    <div class="cart-foot">
+      <div class="cart-total-row"><span>Total</span><span id="cart-total" class="v">$0</span></div>
+      <button class="btn-checkout">Continuar al pago</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Hero neon waves — generate paths in JS to avoid huge HTML
+  (function paintWaves() {
+    const g = document.getElementById("wave-paths");
+    if (!g) return;
+    const NS = "http://www.w3.org/2000/svg";
+    for (let i = 0; i < 24; i++) {
+      const p = document.createElementNS(NS, "path");
+      p.setAttribute("d", `M -100 ${100 + i * 30} Q 300 ${50 + i * 25}, 600 ${200 + i * 28} T 1300 ${150 + i * 30}`);
+      p.setAttribute("stroke", i % 3 === 0 ? "url(#aw)" : "rgba(255,255,255,0.08)");
+      p.setAttribute("stroke-width", i % 5 === 0 ? "1.2" : "0.6");
+      p.setAttribute("fill", "none");
+      g.appendChild(p);
+    }
+    // Map grid
+    const grid = document.getElementById("grid");
+    if (grid) {
+      for (let i = 0; i < 12; i++) {
+        const v = document.createElementNS(NS, "line");
+        v.setAttribute("x1", i * 50); v.setAttribute("y1", 0);
+        v.setAttribute("x2", i * 50); v.setAttribute("y2", 600);
+        v.setAttribute("stroke", "rgba(164,232,58,0.06)");
+        grid.appendChild(v);
+        const h = document.createElementNS(NS, "line");
+        h.setAttribute("x1", 0); h.setAttribute("y1", i * 50);
+        h.setAttribute("x2", 600); h.setAttribute("y2", i * 50);
+        h.setAttribute("stroke", "rgba(164,232,58,0.06)");
+        grid.appendChild(h);
+      }
+    }
+  })();
+</script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

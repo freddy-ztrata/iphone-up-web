@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>iPhone UP — Dark Neon Premium</title>
+<meta name="viewport" content="width=1440" />
+<style>
+  html, body { margin: 0; padding: 0; background: #000; font-family: 'Inter', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="data.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="proposal-a.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#B5F23A",
+  "glowIntensity": 1,
+  "showWaves": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // Apply accent color via CSS variable so the proposal can pick it up
+  React.useEffect(() => {
+    window.__A_TWEAKS = {
+      accentColor: t.accentColor,
+      glowIntensity: t.glowIntensity,
+      showWaves: t.showWaves,
+    };
+    window.dispatchEvent(new Event("a-tweaks"));
+  }, [t]);
+
+  return (
+    <>
+      <ProposalA />
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Color de acento">
+          <TweakColor
+            value={t.accentColor}
+            onChange={v => setTweak("accentColor", v)}
+            options={["#A4E83A", "#7DC72E", "#B5F23A", "#39FF14", "#00E676"]}
+          />
+        </TweakSection>
+        <TweakSection title="Intensidad del glow">
+          <TweakSlider
+            value={t.glowIntensity}
+            onChange={v => setTweak("glowIntensity", v)}
+            min={0} max={1.5} step={0.1}
+          />
+        </TweakSection>
+        <TweakSection title="Líneas onduladas decorativas">
+          <TweakToggle
+            value={t.showWaves}
+            onChange={v => setTweak("showWaves", v)}
+            label="Mostrar fondo neón"
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

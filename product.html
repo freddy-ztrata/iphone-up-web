@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iPhone UP — Detalle</title>
+<meta name="description" content="Detalle, especificaciones y precios del modelo en iPhone UP." />
+<link rel="icon" href="assets/logo-mark.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============== NAV ============== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo" aria-label="iPhone UP — Inicio">
+      <img src="assets/logo-trimmed.png" alt="iPhone UP" />
+    </a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html#catalogo">Catálogo</a>
+      <a href="index.html#trade-in">Vende tu iPhone</a>
+      <a href="index.html#tienda">Tienda</a>
+      <a href="index.html#faq">Soporte</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-ig" href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" aria-label="Instagram iPhone UP">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+          <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+        </svg>
+      </a>
+      <a class="btn-phone" href="tel:+56900000000">+56 9 0000 0000</a>
+      <button id="cart-button" class="btn-cart" aria-label="Abrir carro">
+        CARRO <span id="cart-count" class="badge">0</span>
+      </button>
+      <button id="nav-burger" class="nav-burger" aria-label="Abrir menú">☰</button>
+    </div>
+  </div>
+  <div id="nav-drawer" class="nav-drawer" aria-label="Menú móvil">
+    <a href="index.html#catalogo">Catálogo</a>
+    <a href="index.html#trade-in">Vende tu iPhone</a>
+    <a href="index.html#tienda">Tienda</a>
+    <a href="index.html#faq">Soporte</a>
+    <a href="tel:+56900000000">+56 9 0000 0000</a>
+    <a href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener">Instagram @iphoneup.cl</a>
+  </div>
+</header>
+
+<!-- ============== BREADCRUMB ============== -->
+<nav class="breadcrumb" aria-label="Migas de pan">
+  <div class="breadcrumb-inner">
+    <a href="index.html">Inicio</a>
+    <span class="bc-sep">/</span>
+    <a href="index.html#catalogo">Catálogo</a>
+    <span class="bc-sep">/</span>
+    <span id="bc-current" class="bc-current">…</span>
+  </div>
+</nav>
+
+<!-- ============== PRODUCT BODY ============== -->
+<main id="product-root" class="product-page">
+
+  <section class="product-hero">
+    <svg class="neon-waves" viewBox="0 0 1200 800" preserveAspectRatio="none" aria-hidden="true" style="opacity:.35">
+      <defs>
+        <linearGradient id="aw" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#A4E83A" stop-opacity="0" />
+          <stop offset="50%" stop-color="#A4E83A" stop-opacity="0.7" />
+          <stop offset="100%" stop-color="#A4E83A" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <g id="wave-paths"></g>
+    </svg>
+    <div class="product-hero-inner">
+      <div class="product-gallery">
+        <div class="product-img-wrap">
+          <div class="product-img-glow"></div>
+          <span id="product-badge" class="sealed-badge" style="display:none">SELLADO</span>
+          <img id="product-img" src="" alt="" />
+        </div>
+      </div>
+      <div class="product-info">
+        <div class="eyebrow"><span id="product-line-label">·</span></div>
+        <h1 id="product-title" class="product-title">…</h1>
+        <p id="product-tagline" class="product-tagline">…</p>
+
+        <div class="product-meta-pills">
+          <span id="product-condition-pill" class="meta-pill">Seminuevo A+</span>
+          <span id="product-year-pill" class="meta-pill">2025</span>
+          <span class="meta-pill">Garantía 6 meses</span>
+        </div>
+
+        <div class="product-section-label">Variante</div>
+        <div id="product-variants" class="product-variants"></div>
+
+        <div class="product-section-label">Almacenamiento</div>
+        <div id="product-storages" class="product-storages"></div>
+
+        <div class="product-pricing">
+          <div>
+            <div class="price-label">Desde</div>
+            <div id="product-price" class="product-price">$0</div>
+            <div id="product-cuotas" class="product-cuotas">o 12x $0</div>
+          </div>
+          <div class="product-stock"><span class="dot"></span> Disponible</div>
+        </div>
+
+        <div class="product-cta">
+          <button id="product-add" class="btn-primary">Agregar al carro →</button>
+          <a id="product-wa" class="btn-secondary" target="_blank" rel="noopener">Comprar por WhatsApp</a>
+        </div>
+
+        <div class="product-trust">
+          <div class="t"><span class="t-i">✓</span><span>100% original Apple, número de serie verificable</span></div>
+          <div class="t"><span class="t-i">🛡</span><span>6 meses de garantía oficial UP</span></div>
+          <div class="t"><span class="t-i">↻</span><span>Aceptamos tu iPhone como parte de pago</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SPECS ============== -->
+  <section class="product-specs">
+    <div class="product-specs-inner">
+      <div class="eyebrow">· Especificaciones</div>
+      <h2 class="section-h">Hoja técnica.</h2>
+      <div id="specs-grid" class="specs-grid"></div>
+      <div class="specs-disclaimer">
+        Especificaciones de referencia del fabricante. La configuración exacta del equipo se confirma al momento de la entrega.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== INCLUYE ============== -->
+  <section class="product-includes">
+    <div class="product-includes-inner">
+      <div>
+        <div class="eyebrow">· Qué incluye</div>
+        <h2 class="section-h">Lo que recibes.</h2>
+      </div>
+      <ul class="includes-list">
+        <li><span class="check">✓</span><strong>Equipo</strong> — probado y certificado en nuestra tienda</li>
+        <li><span class="check">✓</span><strong>Cable de carga</strong> compatible</li>
+        <li><span class="check">✓</span><strong>6 meses de garantía UP</strong> (defectos de fábrica, batería, problemas técnicos)</li>
+        <li><span class="check">✓</span><strong>Asesoría personalizada</strong> y soporte post-venta</li>
+        <li><span class="check">✓</span><strong>Despacho a todo Chile</strong> con seguro</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============== TRADE-IN CTA ============== -->
+  <section class="product-tradein-cta">
+    <div class="product-tradein-inner">
+      <div class="eyebrow">· Compramos tu iPhone</div>
+      <h2 class="section-h">¿Cambias <span class="accent">UP</span>grade?</h2>
+      <p>Entrega tu iPhone actual y descuéntalo del próximo. Cotización en 60 segundos, evaluación gratis en tienda.</p>
+      <a class="btn-primary" href="index.html#trade-in">Cotizar mi iPhone →</a>
+    </div>
+  </section>
+
+  <!-- ============== RELATED ============== -->
+  <section class="product-related">
+    <div class="product-related-inner">
+      <div class="eyebrow">· También te puede interesar</div>
+      <h2 class="section-h">Modelos relacionados.</h2>
+      <div id="related-grid" class="related-grid"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============== ERROR STATE ============== -->
+<section id="product-error" class="product-error" style="display:none">
+  <div class="product-error-inner">
+    <h2>Modelo no encontrado</h2>
+    <p>No tenemos información del modelo que buscas. Volvé al catálogo para explorar todos los iPhones disponibles.</p>
+    <a class="btn-primary" href="index.html#catalogo">Ver catálogo</a>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-logo footer-logo">
+          <img src="assets/logo-trimmed.png" alt="iPhone UP" />
+        </a>
+        <p>Tu iPhone, siempre UP. iPhones del 11 al 17 — sellados y seminuevos, garantía real, atención experta.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" class="social-link" aria-label="Instagram iPhone UP">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+            </svg>
+            <span>@iphoneup.cl</span>
+          </a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Catálogo</div>
+        <ul>
+          <li><a href="product.html?id=17">iPhone 17</a></li>
+          <li><a href="product.html?id=16">iPhone 16</a></li>
+          <li><a href="product.html?id=15">iPhone 15</a></li>
+          <li><a href="index.html#catalogo">Ver todos</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Servicios</div>
+        <ul>
+          <li><a href="index.html#trade-in">Compramos tu iPhone</a></li>
+          <li><a href="#">Servicio técnico</a></li>
+          <li><a href="index.html#trade-in">Parte de pago</a></li>
+          <li><a href="index.html#faq">Garantía</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-h">Tienda</div>
+        <ul>
+          <li><a href="index.html#tienda">Padre Mariano 98, Of. 105</a></li>
+          <li><a href="https://wa.me/56900000000" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="tel:+56900000000">+56 9 0000 0000</a></li>
+          <li><a href="mailto:contacto@iphoneup.cl">contacto@iphoneup.cl</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© <span id="footer-year"></span> iPhone UP · Providencia, Chile · Todos los derechos reservados.</div>
+      <div>iPhone UP no está afiliado con Apple Inc.</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============== WHATSAPP FAB ============== -->
+<a class="whatsapp" id="whatsapp-fab" href="https://wa.me/56900000000?text=Hola%20iPhone%20UP" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zM6.597 20.13c1.676.995 3.276 1.591 5.444 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.926-.607zM17.51 14.382c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
+  </svg>
+</a>
+
+<!-- ============== CART DRAWER ============== -->
+<div id="cart-overlay" class="cart-overlay" role="dialog" aria-label="Carro" aria-modal="true">
+  <div class="cart-drawer">
+    <div class="cart-head">
+      <h3>Tu carro</h3>
+      <button id="cart-close" class="cart-close" aria-label="Cerrar carro">×</button>
+    </div>
+    <div id="cart-list"></div>
+    <div class="cart-foot">
+      <div class="cart-total-row"><span>Total</span><span id="cart-total" class="v">$0</span></div>
+      <button class="btn-checkout">Continuar al pago</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Hero waves shared with home
+  (function paintWaves() {
+    const g = document.getElementById("wave-paths");
+    if (!g) return;
+    const NS = "http://www.w3.org/2000/svg";
+    for (let i = 0; i < 24; i++) {
+      const p = document.createElementNS(NS, "path");
+      p.setAttribute("d", `M -100 ${100 + i * 30} Q 300 ${50 + i * 25}, 600 ${200 + i * 28} T 1300 ${150 + i * 30}`);
+      p.setAttribute("stroke", i % 3 === 0 ? "url(#aw)" : "rgba(255,255,255,0.08)");
+      p.setAttribute("stroke-width", i % 5 === 0 ? "1.2" : "0.6");
+      p.setAttribute("fill", "none");
+      g.appendChild(p);
+    }
+  })();
+</script>
+<script src="data.js"></script>
+<script src="specs.js"></script>
+<script src="product.js"></script>
+</body>
+</html>
