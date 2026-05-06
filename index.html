@@ -202,26 +202,33 @@
         </div>
       </div>
     </div>
-    <div class="store-map" aria-hidden="true">
-      <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
-        <rect width="600" height="600" fill="#0d100a" />
-        <g id="grid"></g>
-        <path d="M 0 280 Q 200 270, 600 290" stroke="rgba(255,255,255,0.15)" stroke-width="3" fill="none" />
-        <path d="M 0 380 Q 300 360, 600 400" stroke="rgba(255,255,255,0.1)" stroke-width="2" fill="none" />
-        <path d="M 280 0 Q 270 200, 290 600" stroke="rgba(255,255,255,0.1)" stroke-width="2" fill="none" />
-        <path d="M 100 0 Q 110 300, 90 600" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" fill="none" />
-        <path d="M 450 0 Q 460 300, 440 600" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" fill="none" />
-        <g transform="translate(300, 285)">
-          <circle r="60" fill="rgba(164,232,58,0.13)">
-            <animate attributeName="r" values="40;80;40" dur="2.5s" repeatCount="indefinite"/>
-            <animate attributeName="opacity" values="0.6;0;0.6" dur="2.5s" repeatCount="indefinite"/>
-          </circle>
-          <circle r="14" fill="#A4E83A" />
-          <path d="M -8 -2 L 0 -22 L 8 -2 Z" fill="#A4E83A" />
-        </g>
-        <text x="300" y="340" text-anchor="middle" fill="#A4E83A" font-size="14" font-weight="800" letter-spacing="2">iPhone UP</text>
-        <text x="300" y="358" text-anchor="middle" fill="#888" font-size="11">Padre Mariano 98, Oficina 105</text>
-      </svg>
+    <div class="store-map">
+      <iframe
+        title="Mapa iPhone UP — Padre Mariano 98, Providencia"
+        src="https://www.openstreetmap.org/export/embed.html?bbox=-70.6210597%2C-33.4280602%2C-70.6130597%2C-33.4220602&amp;layer=mapnik&amp;marker=-33.4250602%2C-70.6170597"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        aria-label="Mapa de Padre Mariano 98, Providencia, Santiago"></iframe>
+      <div class="store-map-overlay">
+        <div class="store-map-pin">
+          <div class="store-map-pin-pulse"></div>
+          <div class="store-map-pin-dot"></div>
+        </div>
+        <div class="store-map-card">
+          <div class="store-map-title">iPhone UP</div>
+          <div class="store-map-addr">Padre Mariano 98, Of. 105 · Providencia</div>
+          <div class="store-map-actions">
+            <a class="map-btn gmaps" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=-33.4250602,-70.6170597">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C7.589 2 4 5.589 4 9.995 4 16.5 12 22 12 22s8-5.5 8-12.005C20 5.589 16.411 2 12 2zm0 11a3 3 0 110-6 3 3 0 010 6z"/></svg>
+              Google Maps
+            </a>
+            <a class="map-btn waze" target="_blank" rel="noopener" href="https://waze.com/ul?ll=-33.4250602,-70.6170597&navigate=yes">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.54 6.63a8.94 8.94 0 011.45 4.92c0 2.7-1.18 5.27-3.24 7.05A9.04 9.04 0 0112.7 21h-.06a9.36 9.36 0 01-3.74-.78 3.21 3.21 0 11-6.18-1.6c.13-.5.46-.9.94-1.13a8.92 8.92 0 01-1.04-4.18C2.62 8.13 6.85 4 12.05 4c2.83 0 5.39 1.07 7.16 2.93a1 1 0 011.33-.3zM12.05 6c-4.06 0-7.43 3.27-7.43 7.31 0 1.54.43 3.04 1.27 4.34.34.5.32 1.16-.05 1.65l-.06.07a1.21 1.21 0 102.32.65c.13-.5.62-.83 1.13-.76a7.6 7.6 0 002.86.74h.06c2.04 0 3.95-.78 5.34-2.18a6.93 6.93 0 002.06-4.92 6.94 6.94 0 00-1.13-3.83.99.99 0 01-1.7-.39 5.43 5.43 0 00-4.67-2.68zm-2.7 6.5a1 1 0 110-2 1 1 0 010 2zm5.4 0a1 1 0 110-2 1 1 0 010 2zm-5.66 2.62c.46-.16.95.07 1.13.52.18.45.61.75 1.1.75h2.3c.49 0 .92-.3 1.1-.75.18-.45.67-.68 1.13-.52.46.15.7.65.55 1.1A3.13 3.13 0 0113.62 18.4h-2.3a3.13 3.13 0 01-2.94-2.18c-.15-.46.1-.95.55-1.1z"/></svg>
+              Waze
+            </a>
+          </div>
+        </div>
+      </div>
       <div class="store-map-tag">PROVIDENCIA · STGO</div>
     </div>
   </div>
