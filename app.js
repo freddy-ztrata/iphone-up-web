@@ -15,7 +15,6 @@ const state = {
   tradeStep: 0,
   tradeModel: "iPhone 13 Pro",
   tradeStorage: "256GB",
-  tradeCondition: "Bueno",
   faqOpen: 0,
 };
 
@@ -190,69 +189,79 @@ function renderCart() {
 }
 
 // ---------- Trade-in ----------
+const TRADEIN_MODELS = Object.keys(window.TRADEIN_PRICES);
+
+function tradeStorages() {
+  return Object.keys(window.TRADEIN_PRICES[state.tradeModel] || {});
+}
+
 function tradeEstimate() {
-  const base = {
-    "iPhone 11": 90000, "iPhone 11 Pro": 130000,
-    "iPhone 12": 140000, "iPhone 12 Pro": 180000,
-    "iPhone 13": 200000, "iPhone 13 Pro": 270000,
-    "iPhone 14": 240000, "iPhone 14 Pro": 330000,
-    "iPhone 15": 320000, "iPhone 15 Pro": 420000,
-    "iPhone 16": 400000, "iPhone 16 Pro": 520000,
-  };
-  const stMul = { "64GB": 1, "128GB": 1.05, "256GB": 1.12, "512GB": 1.2 };
-  const cMul = { "Excelente": 1.1, "Bueno": 1, "Regular": 0.8 };
-  return Math.round((base[state.tradeModel] || 200000) * (stMul[state.tradeStorage] || 1) * (cMul[state.tradeCondition] || 1));
+  const m = window.TRADEIN_PRICES[state.tradeModel];
+  if (!m) return null;
+  return m[state.tradeStorage] ?? null;
 }
 
 function renderTrade() {
   const root = $("#trade-step");
   root.innerHTML = "";
-  // progress
+
+  // progress: 2 pasos
   const prog = $("#trade-progress");
   prog.innerHTML = "";
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     prog.appendChild(el("div", { class: "trade-bar" + (i <= state.tradeStep ? " on" : "") }));
   }
-  $("#trade-step-label").textContent = `Paso ${state.tradeStep + 1} de 3`;
+  $("#trade-step-label").textContent = `Paso ${state.tradeStep + 1} de 2`;
 
   if (state.tradeStep === 0) {
     root.appendChild(el("h3", { class: "trade-h" }, "¿Qué iPhone tienes?"));
-    const sel = el("select", { class: "trade-select", onchange: e => state.tradeModel = e.target.value });
-    ["iPhone 11","iPhone 11 Pro","iPhone 12","iPhone 12 Pro","iPhone 13","iPhone 13 Pro","iPhone 14","iPhone 14 Pro","iPhone 15","iPhone 15 Pro","iPhone 16","iPhone 16 Pro"].forEach(m => {
+    const sel = el("select", {
+      class: "trade-select",
+      onchange: e => {
+        state.tradeModel = e.target.value;
+        // Reset capacity to first available for new model
+        const avail = tradeStorages();
+        if (!avail.includes(state.tradeStorage)) state.tradeStorage = avail[0];
+      },
+    });
+    TRADEIN_MODELS.forEach(m => {
       const o = el("option", { value: m }, m);
       if (m === state.tradeModel) o.selected = true;
       sel.appendChild(o);
     });
     root.appendChild(sel);
-  } else if (state.tradeStep === 1) {
-    root.appendChild(el("h3", { class: "trade-h" }, "Capacidad y condición"));
-    const sg = el("div", { class: "trade-grid-4" });
-    ["64GB","128GB","256GB","512GB"].forEach(s => {
+    root.appendChild(el("p", { class: "trade-hint" }, "Compramos del 11 al 17 — todas las variantes."));
+  } else {
+    // Step 2: storage + result on the same view
+    root.appendChild(el("h3", { class: "trade-h" }, "Capacidad"));
+    const avail = tradeStorages();
+    if (!avail.includes(state.tradeStorage)) state.tradeStorage = avail[0];
+    const sg = el("div", { class: "trade-grid-storages" });
+    avail.forEach(s => {
       sg.appendChild(el("button", {
         class: "trade-pill" + (state.tradeStorage === s ? " active" : ""),
         onclick: () => { state.tradeStorage = s; renderTrade(); },
       }, s));
     });
     root.appendChild(sg);
-    const cg = el("div", { class: "trade-grid-3" });
-    ["Excelente","Bueno","Regular"].forEach(c => {
-      cg.appendChild(el("button", {
-        class: "trade-pill" + (state.tradeCondition === c ? " active" : ""),
-        onclick: () => { state.tradeCondition = c; renderTrade(); },
-      }, c));
-    });
-    root.appendChild(cg);
-  } else {
+
+    const value = tradeEstimate();
     const wrap = el("div", { class: "trade-result" });
-    wrap.appendChild(el("div", { class: "trade-result-label" }, "Tu iPhone vale hasta"));
-    wrap.appendChild(el("div", { class: "trade-result-value" }, fmtCLP(tradeEstimate())));
-    wrap.appendChild(el("div", { class: "trade-result-meta" }, `${state.tradeModel} · ${state.tradeStorage} · ${state.tradeCondition}`));
-    wrap.appendChild(el("p", { class: "trade-result-note" }, "Estimación referencial. El valor final se confirma en tienda tras revisión técnica."));
+    wrap.appendChild(el("div", { class: "trade-result-label" }, "Te pagamos hasta"));
+    wrap.appendChild(el("div", { class: "trade-result-value" }, value != null ? fmtCLP(value) : "—"));
+    wrap.appendChild(el("div", { class: "trade-result-meta" }, `${state.tradeModel} · ${state.tradeStorage}`));
+    wrap.appendChild(el("div", { class: "trade-result-condition" }, [
+      el("span", { class: "trc-icon" }, "✦"),
+      el("span", {}, [
+        el("strong", {}, "Precio máximo"),
+        " — equipo en perfecto estado, con caja y accesorios originales. El valor final se confirma en tienda tras revisión técnica.",
+      ]),
+    ]));
     root.appendChild(wrap);
   }
 
   $("#trade-back").style.visibility = state.tradeStep > 0 ? "visible" : "hidden";
-  $("#trade-next").textContent = state.tradeStep === 2 ? "AGENDAR EVALUACIÓN" : "CONTINUAR →";
+  $("#trade-next").textContent = state.tradeStep === 1 ? "AGENDAR EVALUACIÓN" : "CONTINUAR →";
 }
 
 // ---------- FAQ ----------
@@ -326,7 +335,19 @@ function bindCart() {
 // ---------- Trade bindings ----------
 function bindTrade() {
   $("#trade-back").addEventListener("click", () => { state.tradeStep = Math.max(0, state.tradeStep - 1); renderTrade(); });
-  $("#trade-next").addEventListener("click", () => { state.tradeStep = Math.min(2, state.tradeStep + 1); renderTrade(); });
+  $("#trade-next").addEventListener("click", () => {
+    if (state.tradeStep === 1) {
+      // Final step CTA: send to WhatsApp with the model + storage prefilled
+      const value = tradeEstimate();
+      const msg = `Hola, quiero vender mi ${state.tradeModel} ${state.tradeStorage}` +
+                  (value ? ` (estimado hasta ${fmtCLP(value)})` : "") +
+                  ". ¿Cuándo puedo agendar la evaluación?";
+      window.open(`https://wa.me/56900000000?text=${encodeURIComponent(msg)}`, "_blank");
+      return;
+    }
+    state.tradeStep = Math.min(1, state.tradeStep + 1);
+    renderTrade();
+  });
 }
 
 // ---------- Mobile nav ----------

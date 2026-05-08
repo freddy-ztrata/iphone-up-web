@@ -91,6 +91,36 @@ window.FAQS = [
 
 window.fmtCLP = (n) => "$" + n.toLocaleString("es-CL");
 
+// Precios "hasta" que paga iPhone UP por trade-in / parte de pago.
+// Asume equipo en perfecto estado, con caja, accesorios originales.
+// Estructura: { "Modelo": { "64GB": 80000, "128GB": 90000, ... } }
+window.TRADEIN_PRICES = {
+  "iPhone 11":         { "64GB": 80000,  "128GB": 90000 },
+  "iPhone 11 Pro":     { "64GB": 105000, "128GB": 110000 },
+  "iPhone 11 Pro Max": { "64GB": 130000, "128GB": 140000 },
+  "iPhone 12 Mini":    { "64GB": 100000 },
+  "iPhone 12":         { "64GB": 140000, "128GB": 160000 },
+  "iPhone 12 Pro":     { "128GB": 200000, "256GB": 230000 },
+  "iPhone 12 Pro Max": { "128GB": 230000, "256GB": 260000 },
+  "iPhone 13 Mini":    { "128GB": 170000, "256GB": 190000 },
+  "iPhone 13":         { "128GB": 210000, "256GB": 230000 },
+  "iPhone 13 Pro":     { "128GB": 290000, "256GB": 310000 },
+  "iPhone 13 Pro Max": { "128GB": 350000, "256GB": 370000 },
+  "iPhone 14":         { "128GB": 260000, "256GB": 300000 },
+  "iPhone 14 Plus":    { "128GB": 310000 },
+  "iPhone 14 Pro":     { "128GB": 400000, "256GB": 420000 },
+  "iPhone 14 Pro Max": { "128GB": 430000, "256GB": 460000 },
+  "iPhone 15":         { "128GB": 360000 },
+  "iPhone 15 Pro":     { "128GB": 520000 },
+  "iPhone 15 Pro Max": { "256GB": 560000, "512GB": 580000 },
+  "iPhone 16":         { "128GB": 530000, "256GB": 550000 },
+  "iPhone 16 Pro":     { "256GB": 680000 },
+  "iPhone 16 Pro Max": { "256GB": 760000 },
+  "iPhone 17":         { "256GB": 610000, "512GB": 630000 },
+  "iPhone 17 Pro":     { "256GB": 940000, "512GB": 980000 },
+  "iPhone 17 Pro Max": { "256GB": 980000, "512GB": 1020000 },
+};
+
 // ---- Cart persistence (sessionStorage) shared between pages ----
 window.cartStore = {
   key: "iphoneup_cart_v1",
