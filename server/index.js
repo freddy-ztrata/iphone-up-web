@@ -35,7 +35,22 @@ app.use("/api/orders", ordersRouter);
 
 // Static site (root of repo)
 const ROOT = path.resolve(__dirname, "..");
-app.use(express.static(ROOT, { extensions: ["html"] }));
+app.use(
+  express.static(ROOT, {
+    extensions: ["html"],
+    etag: true,
+    lastModified: true,
+    setHeaders(res, filePath) {
+      if (/\.(?:webp|jpe?g|png|svg|ico|woff2?)$/i.test(filePath)) {
+        // Imágenes y fuentes: estables, se cachean fuerte.
+        res.setHeader("Cache-Control", "public, max-age=2592000"); // 30 días
+      } else {
+        // HTML/CSS/JS (incluye data.js con precios): revalidar siempre vía ETag.
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  })
+);
 
 // SPA-style fallbacks: rutas conocidas
 app.get("/checkout", (_req, res) => res.sendFile(path.join(ROOT, "checkout.html")));

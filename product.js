@@ -51,7 +51,6 @@ function init() {
   state.modelIdx = Math.min(q.m, phone.models.length - 1);
   state.storageIdx = q.s; // será clipeada al storage del modelo en render
 
-  document.title = `iPhone UP — iPhone ${phone.line}`;
   renderAll();
   bindGlobalUI();
   renderRelated();
@@ -123,6 +122,10 @@ function renderAll() {
   const specs = window.getSpecsFor(phone.id, model.name) || {};
   $("#product-tagline").textContent = specs.tagline || "";
 
+  // SEO: meta + structured data por producto
+  updateMeta(phone, model, storage);
+  updateProductSchema(phone, model, storage);
+
   // Add-to-cart binding
   const addBtn = $("#product-add");
   addBtn.onclick = () => {
@@ -139,6 +142,75 @@ function renderAll() {
 
   // Specs grid
   renderSpecs(specs);
+}
+
+// ---------- SEO: meta dinámica + structured data por producto ----------
+function setMetaAttr(id, attr, val) {
+  const e = document.getElementById(id);
+  if (e) e.setAttribute(attr, val);
+}
+
+function updateMeta(phone, model, storage) {
+  const condShort = model.sealed ? "sellado" : "seminuevo";
+  const condLong = model.sealed ? "sellado en caja" : "seminuevo A+";
+  const title = `${model.name} ${storage.s} ${condShort} | iPhone UP`;
+  const desc = `${model.name} ${storage.s} ${condLong}, 100% original con garantía de 6 meses. Desde ${fmtCLP(storage.p)}. Tienda física en Providencia, Santiago.`;
+  const canonical = `https://iphoneup.cl/product.html?id=${phone.id}`;
+  const img = "https://iphoneup.cl/" + (model.img || phone.img);
+
+  document.title = title;
+  setMetaAttr("meta-desc", "content", desc);
+  setMetaAttr("canonical-url", "href", canonical);
+  setMetaAttr("og-url", "content", canonical);
+  setMetaAttr("og-title", "content", title);
+  setMetaAttr("og-desc", "content", desc);
+  setMetaAttr("og-image", "content", img);
+  setMetaAttr("tw-title", "content", title);
+  setMetaAttr("tw-desc", "content", desc);
+  setMetaAttr("tw-image", "content", img);
+}
+
+function updateProductSchema(phone, model, storage) {
+  const condition = model.sealed
+    ? "https://schema.org/NewCondition"
+    : "https://schema.org/RefurbishedCondition";
+  const img = "https://iphoneup.cl/" + (model.img || phone.img);
+  const product = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `${model.name} ${storage.s}`,
+    image: img,
+    description: `${model.name} ${storage.s} ${model.sealed ? "sellado en caja" : "seminuevo A+"}, 100% original con garantía de 6 meses.`,
+    brand: { "@type": "Brand", name: "Apple" },
+    category: "Smartphones",
+    itemCondition: condition,
+    offers: {
+      "@type": "Offer",
+      price: storage.p,
+      priceCurrency: "CLP",
+      itemCondition: condition,
+      availability: "https://schema.org/InStock",
+      url: `https://iphoneup.cl/product.html?id=${phone.id}&m=${state.modelIdx}&s=${state.storageIdx}`,
+      seller: { "@type": "Organization", name: "iPhone UP" },
+    },
+  };
+  const breadcrumb = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Inicio", item: "https://iphoneup.cl/" },
+      { "@type": "ListItem", position: 2, name: "Catálogo", item: "https://iphoneup.cl/#catalogo" },
+      { "@type": "ListItem", position: 3, name: model.name },
+    ],
+  };
+  let s = document.getElementById("ld-product");
+  if (!s) {
+    s = document.createElement("script");
+    s.type = "application/ld+json";
+    s.id = "ld-product";
+    document.head.appendChild(s);
+  }
+  s.textContent = JSON.stringify([product, breadcrumb]);
 }
 
 function renderSpecs(specs) {

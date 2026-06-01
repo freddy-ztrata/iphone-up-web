@@ -40,7 +40,7 @@ function renderItems() {
     const row = document.createElement("div");
     row.className = "co-item";
     row.innerHTML = `
-      <img src="${it.img || "assets/iphones/iphone-14.png"}" alt="" />
+      <img src="${it.img || "assets/iphones/iphone-14.webp"}" alt="${it.model || "iPhone"}" loading="lazy" />
       <div>
         <div class="co-item-name">${it.model}</div>
         <div class="co-item-meta">${it.storage || ""}${it.sealed ? " · Sellado" : " · Seminuevo"}</div>

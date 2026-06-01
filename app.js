@@ -360,9 +360,28 @@ document.addEventListener("DOMContentLoaded", () => {
   bindTrade();
   renderTrade();
   renderFAQ();
+  injectFaqSchema();
   renderTestimonials();
   bindNav();
   updateCartBadge();
   // Year in footer
   $("#footer-year").textContent = new Date().getFullYear();
 });
+
+// FAQPage structured data (SEO) — generado desde window.FAQS para no duplicar contenido.
+function injectFaqSchema() {
+  if (!Array.isArray(FAQS) || !FAQS.length) return;
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQS.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
+  const s = document.createElement("script");
+  s.type = "application/ld+json";
+  s.textContent = JSON.stringify(data);
+  document.head.appendChild(s);
+}
