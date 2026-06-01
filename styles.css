@@ -84,16 +84,6 @@ a { color: inherit; }
   transform: translateY(-1px);
   box-shadow: 0 0 16px rgba(164,232,58,0.4);
 }
-.btn-phone {
-  background: transparent;
-  border: 1px solid rgba(164,232,58,0.4);
-  color: var(--accent);
-  padding: 8px 16px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
-  text-decoration: none;
-}
 .btn-cart {
   position: relative;
   background: var(--accent); color: #000;
@@ -408,10 +398,6 @@ a { color: inherit; }
   letter-spacing: -0.5px;
   text-shadow: 0 0 24px rgba(164,232,58,0.4);
 }
-.price-cuotas {
-  font-size: 11px; color: #888; text-align: right;
-  line-height: 1.4;
-}
 .btn-add {
   width: 100%; padding: 14px;
   border-radius: 12px;
@@ -580,13 +566,29 @@ a { color: inherit; }
 }
 .payments-inner {
   max-width: var(--max); margin: 0 auto;
-  display: flex; justify-content: space-between; align-items: center;
-  flex-wrap: wrap; gap: 24px;
 }
+.payments-head { margin-bottom: 32px; }
 .payments-h { font-size: 22px; font-weight: 800; }
-.payments-list { display: flex; gap: 28px; flex-wrap: wrap; }
+.payments-sub {
+  font-size: 14px; color: #888; line-height: 1.6;
+  margin: 8px 0 0; max-width: 560px;
+}
+.payments-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
 .payment {
-  text-align: center;
+  text-align: left;
+  border: 1px solid rgba(164,232,58,0.13);
+  background: rgba(255,255,255,0.02);
+  border-radius: 16px;
+  padding: 22px;
+  transition: border-color .2s, transform .2s;
+}
+.payment:hover {
+  border-color: rgba(164,232,58,0.4);
+  transform: translateY(-3px);
 }
 .payment-icon {
   width: 48px; height: 48px; border-radius: 12px;
@@ -595,9 +597,10 @@ a { color: inherit; }
   display: grid; place-items: center;
   color: var(--accent);
   font-size: 22px;
-  margin: 0 auto 8px;
+  margin: 0 0 14px;
 }
-.payment-name { font-size: 12px; color: #aaa; font-weight: 600; }
+.payment-name { font-size: 14px; color: #fff; font-weight: 700; margin-bottom: 6px; }
+.payment-desc { font-size: 12.5px; color: #888; line-height: 1.55; }
 
 /* ---------- Store ---------- */
 .store {
@@ -900,19 +903,13 @@ a { color: inherit; }
   flex-wrap: wrap; gap: 12px;
   font-size: 12px; color: #666;
 }
-
-/* ---------- WhatsApp button ---------- */
-.whatsapp {
-  position: fixed; bottom: 24px; right: 24px; z-index: 100;
-  width: 56px; height: 56px; border-radius: 999px;
-  background: #25D366; border: none; color: #fff;
-  display: grid; place-items: center;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(37,211,102,0.45), 0 0 0 6px rgba(37,211,102,0.2);
-  text-decoration: none;
-  transition: transform .15s;
+.footer-credit {
+  padding-top: 14px;
+  font-size: 12px; color: #555;
+  text-align: center;
 }
-.whatsapp:hover { transform: scale(1.05); }
+.footer-credit a { color: #777; text-decoration: none; transition: color .2s; }
+.footer-credit a:hover { color: var(--accent); }
 
 /* ---------- Cart drawer ---------- */
 .cart-overlay {
@@ -974,12 +971,20 @@ a { color: inherit; }
   font-size: 24px; font-weight: 800; color: var(--accent);
 }
 .btn-checkout {
+  display: block;
   width: 100%; padding: 16px;
   background: var(--accent); color: #000;
   border: none; border-radius: 12px;
   font-weight: 800; cursor: pointer;
   letter-spacing: 0.5px; text-transform: uppercase;
   box-shadow: 0 0 24px rgba(164,232,58,0.33);
+  text-align: center; text-decoration: none;
+  font-family: inherit; font-size: 14px;
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-checkout:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 32px rgba(164,232,58,0.5);
 }
 
 /* ---------- Responsive ---------- */
@@ -990,7 +995,6 @@ a { color: inherit; }
 @media (max-width: 900px) {
   .nav-links { display: none; }
   .nav-burger { display: inline-flex; align-items: center; justify-content: center; }
-  .btn-phone { display: none; }
   .nav-ig { display: none; } /* El IG se accede desde el menú móvil */
   .hero-inner { grid-template-columns: 1fr; gap: 40px; }
   .hero h1 { font-size: clamp(40px, 8vw, 72px); letter-spacing: -1.5px; }
@@ -1054,16 +1058,15 @@ a { color: inherit; }
   .trade-result-value { font-size: 44px; letter-spacing: -1.5px; }
 
   /* Payments */
-  .payments-inner { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .payments-head { margin-bottom: 24px; }
   .payments-h { font-size: 18px; }
   .payments-list {
-    gap: 16px;
-    flex-wrap: wrap; justify-content: flex-start;
-    width: 100%;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
   }
-  .payment { flex: 0 0 calc((100% - 48px) / 4); }
+  .payment { padding: 18px; }
   .payment-icon { width: 40px; height: 40px; font-size: 18px; }
-  .payment-name { font-size: 11px; }
+  .payment-name { font-size: 13px; }
 
   /* Store */
   .store-card { padding: 28px 22px; }
@@ -1094,9 +1097,6 @@ a { color: inherit; }
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .footer-bottom { flex-direction: column; align-items: flex-start; gap: 8px; }
 
-  /* WhatsApp FAB — slightly smaller and farther in to not block CTAs */
-  .whatsapp { width: 52px; height: 52px; bottom: 18px; right: 18px; }
-
   /* Cart drawer — more breathing room */
   .cart-drawer { padding: 22px 20px; }
   .cart-head h3 { font-size: 19px; }
@@ -1113,7 +1113,7 @@ a { color: inherit; }
   .hero-cta { flex-direction: column; }
   .hero-cta .btn-primary,
   .hero-cta .btn-secondary { width: 100%; }
-  .payment { flex: 0 0 calc((100% - 16px) / 3); }
+  .payments-list { grid-template-columns: 1fr; }
   .store-map-actions { flex-direction: column; }
   .map-btn { width: 100%; }
 }
@@ -1281,10 +1281,6 @@ a { color: inherit; }
   letter-spacing: -1.5px;
   text-shadow: 0 0 32px rgba(164,232,58,0.4);
   line-height: 1;
-}
-.product-cuotas {
-  font-size: 13px; color: var(--muted);
-  margin-top: 4px;
 }
 .product-stock {
   font-size: 12px; color: #aaa;
@@ -1513,7 +1509,6 @@ a { color: inherit; }
 
   .product-pricing { flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 4px; }
   .product-price { font-size: 36px; }
-  .product-cuotas { font-size: 12px; }
   .product-stock { font-size: 11px; }
 
   .product-cta { grid-template-columns: 1fr; gap: 10px; }

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>¡Pago aprobado! — iPhone UP</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="icon" href="assets/logo-mark.jpg" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="checkout.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><img src="assets/logo-trimmed.png" alt="iPhone UP" /></a>
+    <div class="nav-actions"><a class="nav-ig" href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" aria-label="Instagram iPhone UP"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a></div>
+  </div>
+</header>
+
+<main class="checkout">
+  <div class="checkout-inner" style="max-width:680px">
+    <div class="co-section" style="text-align:center;padding:48px 28px">
+      <div style="font-size:56px;line-height:1;margin-bottom:18px">✅</div>
+      <h1 style="font-size:32px;font-weight:800;margin:0 0 10px">¡Pago aprobado!</h1>
+      <p style="color:#b3b3b3;font-size:16px;margin:0 0 24px">
+        Recibimos tu pedido. Te contactaremos en las próximas horas para
+        confirmar el despacho con Chilexpress.
+      </p>
+
+      <div id="order-detail" style="text-align:left;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:18px;margin:18px 0">
+        <p style="color:#b3b3b3;margin:0">Cargando detalle de tu orden…</p>
+      </div>
+
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:18px">
+        <a href="index.html" class="btn-primary">Volver al inicio</a>
+        <a href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" class="btn-secondary">Escríbenos por Instagram</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(async () => {
+  const params = new URLSearchParams(location.search);
+  const orderId = params.get("order") || sessionStorage.getItem("iphoneup_last_order");
+  const root = document.getElementById("order-detail");
+
+  if (!orderId) {
+    root.innerHTML = "<p style='color:#b3b3b3;margin:0'>Sin información de orden.</p>";
+    return;
+  }
+
+  try {
+    const r = await fetch("/api/orders/" + orderId);
+    if (!r.ok) throw new Error("No se pudo cargar la orden");
+    const o = await r.json();
+    const fmt = n => "$" + Number(n).toLocaleString("es-CL");
+
+    const items = o.items.map(i =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+         <span>${i.model} ${i.storage || ""}</span>
+         <span style="font-weight:600">${fmt(i.price)}</span>
+       </div>`
+    ).join("");
+
+    root.innerHTML = `
+      <div style="font-size:13px;color:#888;margin-bottom:8px">Orden <strong style="color:#fff">${o.id}</strong></div>
+      ${items}
+      <div style="display:flex;justify-content:space-between;margin-top:10px;color:#b3b3b3">
+        <span>Envío Chilexpress</span><span>${fmt(o.shipping.cost)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-weight:800;font-size:18px">
+        <span>Total</span><span style="color:var(--accent,#A4E83A)">${fmt(o.total)}</span>
+      </div>
+      <div style="margin-top:10px;font-size:13px;color:#888">Estado: <strong style="color:#fff">${o.payment?.status || o.status}</strong></div>
+    `;
+  } catch (err) {
+    root.innerHTML = "<p style='color:#ff6b6b;margin:0'>" + err.message + "</p>";
+  }
+})();
+</script>
+</body>
+</html>

@@ -118,16 +118,10 @@ function renderAll() {
 
   // Pricing
   $("#product-price").textContent = fmtCLP(storage.p);
-  $("#product-cuotas").textContent = `o 12x ${fmtCLP(Math.round(storage.p / 12))} sin interés`;
 
   // Description / tagline from specs
   const specs = window.getSpecsFor(phone.id, model.name) || {};
   $("#product-tagline").textContent = specs.tagline || "";
-
-  // WhatsApp CTA — pre-fills message
-  const wa = $("#product-wa");
-  const msg = `Hola, me interesa el ${model.name} ${storage.s} (${fmtCLP(storage.p)}). ¿Está disponible?`;
-  wa.href = `https://wa.me/56900000000?text=${encodeURIComponent(msg)}`;
 
   // Add-to-cart binding
   const addBtn = $("#product-add");

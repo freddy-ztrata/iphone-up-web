@@ -17,3 +17,12 @@ npm-debug.log*
 # Server runtime
 __pycache__/
 *.pyc
+
+# Node / Express
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Server-side data (orders persisted by Express)
+server/data/orders.json

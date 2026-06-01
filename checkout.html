@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Checkout — iPhone UP</title>
+<meta name="description" content="Completa tu compra de iPhone UP — pago seguro con Mercado Pago, envío con Chilexpress a todo Chile." />
+<meta name="robots" content="noindex,nofollow" />
+<link rel="icon" href="assets/logo-mark.jpg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="checkout.css" />
+</head>
+<body>
+
+<!-- ============== NAV ============== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo" aria-label="iPhone UP — Inicio">
+      <img src="assets/logo-trimmed.png" alt="iPhone UP" />
+    </a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html#catalogo">Catálogo</a>
+      <a href="index.html#trade-in">Vende tu iPhone</a>
+      <a href="index.html#tienda">Tienda</a>
+      <a href="index.html#faq">Soporte</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-ig" href="https://www.instagram.com/iphoneup.cl/" target="_blank" rel="noopener" aria-label="Instagram iPhone UP">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+          <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="checkout">
+  <div class="checkout-inner">
+
+    <header class="checkout-head">
+      <a href="index.html" class="checkout-back">← Seguir comprando</a>
+      <h1>Finalizar compra</h1>
+      <p class="checkout-sub">Pago seguro con Mercado Pago · Envío con Chilexpress a todo Chile</p>
+    </header>
+
+    <div id="checkout-empty" class="checkout-empty" style="display:none">
+      <p>Tu carro está vacío.</p>
+      <a href="index.html#catalogo" class="btn-primary">Ver catálogo →</a>
+    </div>
+
+    <div id="checkout-grid" class="checkout-grid">
+
+      <!-- ============== FORM ============== -->
+      <form id="checkout-form" class="checkout-form" novalidate>
+
+        <section class="co-section">
+          <h2>1. Tus datos</h2>
+          <div class="co-row two">
+            <label class="co-field">
+              <span>Nombre completo</span>
+              <input type="text" name="name" required autocomplete="name" />
+            </label>
+            <label class="co-field">
+              <span>RUT</span>
+              <input type="text" name="rut" placeholder="12.345.678-9" autocomplete="off" />
+            </label>
+          </div>
+          <div class="co-row two">
+            <label class="co-field">
+              <span>Email</span>
+              <input type="email" name="email" required autocomplete="email" placeholder="tucorreo@ejemplo.cl" />
+            </label>
+            <label class="co-field">
+              <span>Teléfono</span>
+              <input type="tel" name="phone" required autocomplete="tel" placeholder="+56 9 ..." />
+            </label>
+          </div>
+        </section>
+
+        <section class="co-section">
+          <h2>2. Dirección de despacho</h2>
+          <div class="co-row two">
+            <label class="co-field">
+              <span>Región</span>
+              <select name="region" id="co-region" required>
+                <option value="">Selecciona una región</option>
+              </select>
+            </label>
+            <label class="co-field">
+              <span>Comuna</span>
+              <select name="county" id="co-county" required disabled>
+                <option value="">Selecciona primero una región</option>
+              </select>
+            </label>
+          </div>
+          <div class="co-row two">
+            <label class="co-field">
+              <span>Calle</span>
+              <input type="text" name="street" required autocomplete="address-line1" />
+            </label>
+            <label class="co-field">
+              <span>Número</span>
+              <input type="text" name="number" required autocomplete="address-line2" />
+            </label>
+          </div>
+          <label class="co-field">
+            <span>Depto / casa / referencia (opcional)</span>
+            <input type="text" name="extra" autocomplete="address-line3" />
+          </label>
+        </section>
+
+        <section class="co-section">
+          <h2>3. Costo de envío</h2>
+          <div id="co-shipping" class="co-shipping">
+            <p class="co-hint">Completa la región y comuna para cotizar el envío con Chilexpress.</p>
+          </div>
+        </section>
+
+        <section class="co-section">
+          <h2>4. Pago</h2>
+          <p class="co-hint">
+            Al continuar serás redirigido a <strong>Mercado Pago</strong> donde podrás pagar con
+            tarjeta de crédito, débito, transferencia o efectivo en puntos de pago.
+          </p>
+          <div class="co-pay-icons" aria-hidden="true">
+            <span>Visa</span><span>Mastercard</span><span>WebPay</span><span>Mach</span><span>Transferencia</span>
+          </div>
+        </section>
+
+        <button id="co-submit" type="submit" class="btn-primary co-submit" disabled>
+          Pagar con Mercado Pago →
+        </button>
+        <p id="co-error" class="co-error" role="alert"></p>
+      </form>
+
+      <!-- ============== SUMMARY ============== -->
+      <aside class="co-summary" aria-label="Resumen de tu pedido">
+        <h2>Tu pedido</h2>
+        <div id="co-items" class="co-items"></div>
+        <div class="co-totals">
+          <div class="co-line"><span>Subtotal</span><span id="co-subtotal">$0</span></div>
+          <div class="co-line"><span>Envío</span><span id="co-ship-cost">—</span></div>
+          <div class="co-line total"><span>Total</span><span id="co-total">$0</span></div>
+        </div>
+        <p class="co-summary-foot">
+          Precios en pesos chilenos (CLP). Garantía 6 meses incluida.
+        </p>
+      </aside>
+
+    </div>
+  </div>
+</main>
+
+<script src="data.js"></script>
+<script src="checkout.js"></script>
+</body>
+</html>

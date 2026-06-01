@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>iPhone UP — Solicitud de credenciales para integración de pagos y envíos</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #111;
+    background: #fff;
+    margin: 0;
+    padding: 24px;
+    line-height: 1.5;
+    font-size: 11.5pt;
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    background: #0a0a0a;
+    color: #fff;
+    padding: 48px 40px;
+    margin: -24px -24px 24px;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 90% 10%, rgba(164,232,58,0.25), transparent 50%),
+      radial-gradient(circle at 10% 90%, rgba(164,232,58,0.12), transparent 50%);
+    pointer-events: none;
+  }
+  .cover > * { position: relative; z-index: 1; }
+  .cover-brand {
+    display: inline-block;
+    color: #A4E83A;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    font-size: 11pt;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+  .cover h1 {
+    font-size: 28pt;
+    font-weight: 800;
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  .cover h1 span { color: #A4E83A; }
+  .cover p {
+    margin: 0;
+    font-size: 13pt;
+    color: #ccc;
+    max-width: 520px;
+    line-height: 1.55;
+  }
+  .cover-meta {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    display: flex;
+    gap: 32px;
+    font-size: 10pt;
+    color: #b3b3b3;
+  }
+  .cover-meta strong { color: #fff; display: block; margin-bottom: 2px; font-weight: 600; }
+
+  /* ---------- Intro ---------- */
+  .intro {
+    background: #f7f7f5;
+    border-left: 4px solid #A4E83A;
+    padding: 18px 22px;
+    margin: 0 0 28px;
+    border-radius: 4px;
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+  .intro p { margin: 0 0 8px; }
+  .intro p:last-child { margin: 0; }
+
+  /* ---------- Sections ---------- */
+  h2 {
+    font-size: 16pt;
+    font-weight: 800;
+    margin: 36px 0 4px;
+    letter-spacing: -0.01em;
+    color: #0a0a0a;
+    page-break-after: avoid;
+  }
+  h2 .sec-num {
+    display: inline-block;
+    width: 28px; height: 28px;
+    background: #A4E83A;
+    color: #0a0a0a;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-size: 13pt;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  h2 + .h2-sub {
+    color: #666;
+    margin: 0 0 18px;
+    font-size: 10.5pt;
+  }
+
+  h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    margin: 20px 0 8px;
+    color: #0a0a0a;
+    page-break-after: avoid;
+  }
+
+  /* ---------- Steps ---------- */
+  ol.steps { counter-reset: step; padding-left: 0; list-style: none; margin: 0 0 16px; }
+  ol.steps > li {
+    counter-increment: step;
+    padding: 12px 14px 12px 50px;
+    position: relative;
+    margin-bottom: 8px;
+    background: #fafaf8;
+    border-radius: 8px;
+    page-break-inside: avoid;
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    width: 26px; height: 26px;
+    background: #0a0a0a;
+    color: #A4E83A;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 26px;
+    font-weight: 800;
+    font-size: 10pt;
+  }
+  ol.steps > li strong { color: #0a0a0a; }
+  ol.steps > li a { color: #0a0a0a; text-decoration: underline; word-break: break-all; }
+
+  /* ---------- Tables (credenciales) ---------- */
+  table.creds {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 14px 0 18px;
+    border: 1px solid #e3e3e0;
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 10.5pt;
+    page-break-inside: avoid;
+  }
+  table.creds th {
+    background: #0a0a0a;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 10pt;
+  }
+  table.creds td {
+    padding: 10px 14px;
+    border-top: 1px solid #ececea;
+    vertical-align: top;
+  }
+  table.creds td:first-child {
+    font-weight: 700;
+    color: #0a0a0a;
+    background: #f7f7f5;
+    width: 36%;
+  }
+  table.creds code {
+    background: #efeeea;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9.5pt;
+    word-break: break-all;
+  }
+
+  /* ---------- Info / Warning boxes ---------- */
+  .note {
+    background: #fff8e6;
+    border-left: 4px solid #ffb800;
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .note strong { color: #6b4f00; }
+
+  .tip {
+    background: #ecf9d6;
+    border-left: 4px solid #A4E83A;
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+
+  /* ---------- Checklist final ---------- */
+  .checklist {
+    background: #0a0a0a;
+    color: #fff;
+    padding: 28px;
+    border-radius: 12px;
+    margin: 28px 0 0;
+    page-break-inside: avoid;
+  }
+  .checklist h2 {
+    color: #A4E83A;
+    margin-top: 0;
+    border: none;
+    font-size: 16pt;
+  }
+  .checklist h2 .sec-num {
+    background: #A4E83A;
+    color: #0a0a0a;
+  }
+  .checklist ul { list-style: none; padding: 0; margin: 16px 0 0; }
+  .checklist ul li {
+    padding: 10px 0 10px 32px;
+    position: relative;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 11pt;
+  }
+  .checklist ul li:last-child { border: none; }
+  .checklist ul li::before {
+    content: "☐";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    color: #A4E83A;
+    font-size: 16pt;
+    line-height: 1;
+  }
+  .checklist code {
+    background: rgba(164,232,58,0.12);
+    color: #A4E83A;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9.5pt;
+  }
+
+  /* ---------- Footer ---------- */
+  .doc-foot {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid #e3e3e0;
+    font-size: 9.5pt;
+    color: #888;
+    text-align: center;
+  }
+
+  /* Print: avoid awkward page breaks */
+  @media print {
+    body { padding: 0; }
+    .cover { margin: 0 0 24px; padding: 32px 24px; border-radius: 0; }
+    h2 { page-break-after: avoid; }
+    ol.steps > li, .note, .tip, table.creds, .checklist { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-brand">iPhone UP · Integración Web</div>
+  <h1>Credenciales para activar<br/><span>pagos y envíos online</span></h1>
+  <p>
+    Para que tu sitio <strong style="color:#fff">iphoneup.cl</strong> pueda cobrar con Mercado Pago
+    y cotizar envíos con Chilexpress en tiempo real, necesitamos que nos hagas
+    llegar los datos que detallamos en este documento.
+  </p>
+  <div class="cover-meta">
+    <div><strong>Para</strong>iPhone UP (cliente)</div>
+    <div><strong>De</strong>Digitals Agencia · freddy@digitals.cl</div>
+    <div><strong>Tiempo estimado</strong>30–45 minutos</div>
+  </div>
+</section>
+
+<div class="intro">
+  <p>Este documento describe <strong>paso a paso</strong> cómo obtener las credenciales que necesitamos
+  para activar el pago en línea y el cálculo automático de envíos. Son dos integraciones independientes:</p>
+  <p>
+    <strong>1. Mercado Pago Chile</strong> — para cobrar a tus clientes con tarjeta de crédito,
+    débito, transferencia y todos los medios de Mercado Pago.
+  </p>
+  <p>
+    <strong>2. Chilexpress</strong> — para cotizar automáticamente el costo de envío
+    en el checkout según la comuna del cliente.
+  </p>
+  <p style="margin-top:10px"><strong>Importante:</strong> ambas plataformas <u>te pertenecen a ti</u>,
+  no a nosotros. Nosotros solo recibimos las llaves de acceso (tokens) para conectar el sitio.
+  El dinero llega siempre a <strong>tu cuenta</strong> de Mercado Pago y los envíos se
+  cargan a <strong>tu convenio</strong> con Chilexpress.</p>
+</div>
+
+<!-- ============== MERCADO PAGO ============== -->
+<h2><span class="sec-num">1</span> Mercado Pago Chile</h2>
+<p class="h2-sub">Necesitas una cuenta de Mercado Pago en Chile (no Argentina, no Colombia) verificada y con datos bancarios cargados para retirar el dinero.</p>
+
+<h3>Paso a paso</h3>
+<ol class="steps">
+  <li>
+    Ingresa a <a href="https://www.mercadopago.cl">https://www.mercadopago.cl</a> con la cuenta
+    de Mercado Pago de <strong>iPhone UP</strong> (la que recibirá los pagos).
+  </li>
+  <li>
+    En el menú superior derecho, entra a <strong>"Tu negocio"</strong> →
+    <strong>"Configuración"</strong> → o directamente al panel de desarrolladores:
+    <a href="https://www.mercadopago.cl/developers/panel/app">https://www.mercadopago.cl/developers/panel/app</a>
+  </li>
+  <li>
+    Haz clic en <strong>"Crear aplicación"</strong>. Completa:
+    <br/>· Nombre: <code>iPhoneUP Web</code>
+    <br/>· Modelo de integración: <strong>"Pagos online"</strong>
+    <br/>· Producto: <strong>"Checkout Pro"</strong>
+    <br/>· Industria: <strong>Electrónica / Tecnología</strong>
+  </li>
+  <li>
+    Una vez creada la aplicación, en el panel verás dos pestañas: <strong>"Credenciales de
+    producción"</strong> y <strong>"Credenciales de prueba"</strong>. <u>Necesitamos las de
+    producción</u>. Copia y envíanos los dos valores que aparecen:
+    <ul style="margin:6px 0 0 18px;padding:0">
+      <li><strong>Access Token</strong> (empieza con <code>APP_USR-</code> seguido de varios caracteres)</li>
+      <li><strong>Public Key</strong> (también empieza con <code>APP_USR-</code>)</li>
+    </ul>
+  </li>
+  <li>
+    Configura el <strong>webhook</strong> de notificaciones para que el sitio sepa cuándo se
+    completa un pago. Dentro de la misma aplicación, ve a <strong>"Webhooks"</strong> y agrega:
+    <br/>· URL: <code>https://iphoneup.cl/api/mercadopago/webhook</code>
+    <br/>· Eventos: marcar <strong>"Pagos"</strong>
+    <br/>· Guarda los cambios.
+  </li>
+</ol>
+
+<div class="note">
+  <strong>Importante — seguridad:</strong> el <em>Access Token</em> es la llave que permite cobrar
+  en tu nombre. Nunca lo compartas por redes sociales, ni lo pegues en chats públicos.
+  Envíanoslo por mensaje privado de WhatsApp o correo directo. Nosotros lo guardaremos
+  cifrado en el servidor; nunca aparece en el navegador del cliente final.
+</div>
+
+<h3>Datos que debes enviarnos (Mercado Pago)</h3>
+<table class="creds">
+  <thead>
+    <tr><th style="width:36%">Dato</th><th>Descripción</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Access Token (producción)</td>
+      <td>El token completo que empieza con <code>APP_USR-...</code></td>
+    </tr>
+    <tr>
+      <td>Public Key (producción)</td>
+      <td>La llave pública que empieza con <code>APP_USR-...</code></td>
+    </tr>
+    <tr>
+      <td>Email de la cuenta MP</td>
+      <td>Para asociar correctamente los cobros</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============== CHILEXPRESS ============== -->
+<h2><span class="sec-num">2</span> Chilexpress</h2>
+<p class="h2-sub">Necesitas tener convenio comercial activo con Chilexpress como empresa (no cliente residencial).</p>
+
+<h3>Paso a paso</h3>
+<ol class="steps">
+  <li>
+    Ingresa al portal de desarrolladores de Chilexpress:
+    <a href="https://developers.chilexpress.cl">https://developers.chilexpress.cl</a>
+  </li>
+  <li>
+    Si aún no tienes cuenta, regístrate con el correo del titular del convenio.
+    Si ya tienes cuenta, inicia sesión.
+  </li>
+  <li>
+    En el menú superior, entra a <strong>"Productos"</strong> y suscríbete (gratis) a:
+    <br/>· <strong>Cotizador / Rating</strong> — para calcular precios de envío.
+    <br/>· <strong>Geo Referencia</strong> — para listar regiones y comunas de Chile.
+  </li>
+  <li>
+    Una vez suscrito, ve a <strong>"Mi cuenta"</strong> → <strong>"Suscripciones"</strong>.
+    Allí verás un campo "Primary key" para cada producto.
+    Cópianos las dos llaves primarias.
+  </li>
+  <li>
+    Confirma la <strong>dirección de origen</strong> desde donde despachan los iPhones
+    (si no es Providencia, indícanos la comuna correcta para configurar el sistema).
+  </li>
+</ol>
+
+<div class="tip">
+  <strong>Sin convenio aún:</strong> si todavía no tienes cuenta empresa con Chilexpress,
+  puedes contactarlos en <a href="https://www.chilexpress.cl/cuentas">chilexpress.cl/cuentas</a> o
+  llamar al <strong>600 200 7000</strong>. Mientras tanto, podemos dejar el checkout funcionando con
+  tarifas fijas por región hasta que esté listo el convenio.
+</div>
+
+<h3>Datos que debes enviarnos (Chilexpress)</h3>
+<table class="creds">
+  <thead>
+    <tr><th>Dato</th><th>Descripción</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Subscription Key — Cotizador</td>
+      <td>"Primary key" del producto Rating</td>
+    </tr>
+    <tr>
+      <td>Subscription Key — Geo Referencia</td>
+      <td>"Primary key" del producto Geo Referencia (suele ser la misma)</td>
+    </tr>
+    <tr>
+      <td>Comuna y región de origen</td>
+      <td>Por defecto: Providencia, Región Metropolitana</td>
+    </tr>
+    <tr>
+      <td>Código de cliente / convenio</td>
+      <td>Solo si Chilexpress te lo entregó al activar el convenio</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============== CHECKLIST FINAL ============== -->
+<section class="checklist">
+  <h2><span class="sec-num">✓</span> Checklist — qué enviarnos</h2>
+  <p style="color:#ccc;margin:0 0 6px;font-size:10.5pt">
+    Cuando tengas todo, mándanos un mensaje a <strong style="color:#A4E83A">freddy@digitals.cl</strong>
+    o por WhatsApp con los siguientes datos:
+  </p>
+  <ul>
+    <li><strong>Mercado Pago — Access Token (producción):</strong> <code>APP_USR-________</code></li>
+    <li><strong>Mercado Pago — Public Key (producción):</strong> <code>APP_USR-________</code></li>
+    <li><strong>Mercado Pago — Email de la cuenta</strong></li>
+    <li><strong>Mercado Pago — Webhook configurado</strong> con la URL que te indicamos</li>
+    <li><strong>Chilexpress — Subscription Key Cotizador</strong></li>
+    <li><strong>Chilexpress — Subscription Key Geo Referencia</strong></li>
+    <li><strong>Comuna y región de origen del despacho</strong> (default: Providencia, RM)</li>
+  </ul>
+</section>
+
+<p style="margin-top:18px;font-size:10.5pt;line-height:1.6">
+  Apenas tengamos estos datos, activamos el pago en línea en tu sitio. El proceso completo
+  desde nuestro lado (cargar credenciales + pruebas + pasar a producción) toma alrededor
+  de <strong>1 día hábil</strong>.
+</p>
+
+<div class="doc-foot">
+  Documento generado para iPhone UP · Digitals Agencia · freddy@digitals.cl
+</div>
+
+</body>
+</html>

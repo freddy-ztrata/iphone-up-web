@@ -85,8 +85,8 @@ window.FAQS = [
   { q: "¿Qué garantía incluyen?",      a: "Todos nuestros equipos —sellados y seminuevos— incluyen 6 meses de garantía oficial UP que cubre defectos de fábrica y problemas técnicos. La gestión es directa con nosotros, sin intermediarios." },
   { q: "¿Puedo entregar mi iPhone como parte de pago?", a: "Sí. Cotiza online en 60 segundos, agendas tu visita y la evaluación final es gratuita. El descuento se aplica directo al precio del nuevo equipo." },
   { q: "¿Hacen envíos a regiones?",    a: "Sí, despachamos a todo Chile vía Starken o Chilexpress con seguro incluido. Despacho gratis dentro de RM en compras sobre $500.000." },
-  { q: "¿Cómo pago?",                  a: "Aceptamos efectivo, transferencia, débito, crédito y financiamiento PágaloAsí en hasta 12 cuotas sin interés." },
-  { q: "¿Atienden sin cita?",          a: "Por tu seguridad y la nuestra, atendemos preferentemente con cita previa por WhatsApp. También aceptamos walk-in en horario de tienda." },
+  { q: "¿Cómo pago?",                  a: "Aceptamos efectivo, transferencia bancaria y tarjetas de débito y crédito (Visa, Mastercard y American Express). Paga con el medio que más te acomode en nuestra tienda de Providencia." },
+  { q: "¿Atienden sin cita?",          a: "Por tu seguridad y la nuestra, atendemos preferentemente con cita previa por Instagram (@iphoneup.cl). También aceptamos walk-in en horario de tienda." },
 ];
 
 window.fmtCLP = (n) => "$" + n.toLocaleString("es-CL");
