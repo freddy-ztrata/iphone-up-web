@@ -334,8 +334,12 @@ function bindTrade() {
   $("#trade-back").addEventListener("click", () => { state.tradeStep = Math.max(0, state.tradeStep - 1); renderTrade(); });
   $("#trade-next").addEventListener("click", () => {
     if (state.tradeStep === 1) {
-      // Final step CTA: send the user to Instagram to coordinate the evaluation
-      window.open("https://www.instagram.com/iphoneup.cl/", "_blank");
+      // Final step CTA: send to WhatsApp with the model + storage prefilled
+      const value = tradeEstimate();
+      const msg = `Hola, quiero vender mi ${state.tradeModel} ${state.tradeStorage}` +
+                  (value ? ` (estimado hasta ${fmtCLP(value)})` : "") +
+                  ". ¿Cuándo puedo agendar la evaluación?";
+      window.open(`https://wa.me/56983265824?text=${encodeURIComponent(msg)}`, "_blank");
       return;
     }
     state.tradeStep = Math.min(1, state.tradeStep + 1);
