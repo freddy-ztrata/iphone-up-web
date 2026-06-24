@@ -60,16 +60,23 @@ function adminApp() {
 
     bindKeyboard() {
       window.addEventListener("keydown", (e) => {
+        // Esc siempre funciona (para cerrar palette/drawer)
+        if (e.key === "Escape") {
+          if (this.palette.open) this.palette.open = false;
+          else if (this.drawer.open) this.closeDrawer();
+          return;
+        }
+
+        // El resto de atajos solo cuando hay sesión y no estamos tipeando en un input.
+        if (!this.session) return;
+        const tag = (e.target?.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+
         // ⌘K / Ctrl+K → command palette
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
           this.openPalette();
           return;
-        }
-        // Esc cierra drawer/palette
-        if (e.key === "Escape") {
-          if (this.palette.open) this.palette.open = false;
-          else if (this.drawer.open) this.closeDrawer();
         }
         // G + letra → navegación
         if (e.key.toLowerCase() === "g" && !e.metaKey && !e.ctrlKey) {
