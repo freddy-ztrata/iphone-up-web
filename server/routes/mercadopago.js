@@ -13,6 +13,9 @@ const express = require("express");
 const crypto = require("crypto");
 const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 const { saveOrder, getOrder, updateOrderStatus } = require("../lib/storage");
+const mpSignature = require("../lib/mp-signature");
+const stockLib = require("../lib/stock");
+const couponsLib = require("../lib/coupons");
 
 const router = express.Router();
 
@@ -139,7 +142,14 @@ router.post("/preference", async (req, res) => {
 // Webhook de Mercado Pago. MP envía POST con `?type=payment&data.id=...`
 // Doc: https://www.mercadopago.cl/developers/es/docs/your-integrations/notifications/webhooks
 router.post("/webhook", async (req, res) => {
-  // Responder rápido — MP reintenta si no responde 2xx en pocos segundos.
+  // Validar firma ANTES de responder, pero responder 200 igual para que MP
+  // no reintente (las firmas inválidas suelen indicar replay attacks que
+  // queremos ignorar silenciosamente).
+  const sig = mpSignature.verify(req);
+  if (!sig.ok) {
+    console.warn("[mp webhook] firma inválida:", sig.reason);
+    return res.status(401).send("invalid signature");
+  }
   res.status(200).send("ok");
 
   const type = req.query.type || req.body?.type;
@@ -159,6 +169,7 @@ router.post("/webhook", async (req, res) => {
       console.warn("[mp webhook] orden no encontrada:", externalRef);
       return;
     }
+    const wasApprovedBefore = order.status === "approved";
     updateOrderStatus(externalRef, payment.status, {
       paymentId: String(payment.id),
       status: payment.status,
@@ -169,6 +180,19 @@ router.post("/webhook", async (req, res) => {
       transactionAmount: payment.transaction_amount,
       approvedAt: payment.date_approved,
     });
+
+    // Si el pago acaba de ser aprobado, descontar stock e incrementar cupón.
+    if (payment.status === "approved" && !wasApprovedBefore) {
+      try {
+        stockLib.commitOrderSale(getOrder(externalRef));
+      } catch (err) {
+        console.error("[mp webhook] no se pudo descontar stock:", err.message);
+      }
+      if (order.couponCode) {
+        try { couponsLib.incrementUsage(order.couponCode); } catch {}
+      }
+    }
+
     console.log(`[mp webhook] orden ${externalRef} → ${payment.status}`);
   } catch (err) {
     console.error("[mp webhook] error procesando pago:", err?.message || err);

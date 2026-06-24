@@ -12,44 +12,109 @@ Contact is **Instagram-only** (`@iphoneup.cl`). Phone numbers and WhatsApp butto
 
 ## Stack
 
-Frontend: Vanilla HTML + CSS + JS (sin bundler). Backend mínimo: Node + Express (Node 20+, usa `fetch` global) en `server/` que sirve los estáticos del repo y expone `/api/*` para Mercado Pago (Checkout Pro) y Chilexpress (cotizador + geo).
+Frontend: Vanilla HTML + CSS + JS (sin bundler). Backend Node + Express (Node 20+, `fetch` global, SQLite via `better-sqlite3`). El admin "Neon Console" en `/admin` está hecho con Alpine.js 3 (CDN, sin build step).
 
 ```
-server/index.js           → Express app + static serving (raíz del repo)
-server/routes/*.js        → /api/mercadopago, /api/chilexpress, /api/orders
-server/lib/chilexpress.js → Cliente API Chilexpress (Geo + Rating)
-server/lib/storage.js     → Persistencia JSON de órdenes (server/data/orders.json)
-Dockerfile                → Node 20 alpine, expone 8080
-.env.example              → Plantilla de credenciales
-PAGOS_Y_ENVIOS.md         → Guía interna: qué pedir al cliente, cómo configurar Dokploy
-docs/                     → Documento PDF + HTML para enviar al cliente con la solicitud
+server/index.js              → Express + helmet + sessions + static serving
+server/db.js                 → Singleton SQLite + migraciones idempotentes al boot
+server/migrations/*.sql      → Schema versionado (001_initial.sql, ...)
+server/routes/mercadopago.js → /api/mercadopago/* (Checkout Pro + webhook firmado)
+server/routes/chilexpress.js → /api/chilexpress/* (geo + rating, con fallback)
+server/routes/orders.js      → /api/orders/:id (consulta pública)
+server/routes/admin/*.js     → /api/admin/* (auth, products, coupons, orders, users, audit, uploads, dashboard)
+server/middleware/auth.js    → requireAuth + requireRole
+server/lib/catalog.js        → buildCatalog() y buildDataJs() (genera /data.js desde DB)
+server/lib/catalog-extras.js → TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES (aún hardcoded)
+server/lib/users.js          → bcrypt + lookup + bootstrap del primer usuario
+server/lib/audit.js          → log de mutaciones (before/after JSON)
+server/lib/coupons.js        → validación y aplicación al carro
+server/lib/stock.js          → adjust() + commitOrderSale() para webhook MP
+server/lib/storage.js        → órdenes en SQLite (refactor desde JSON)
+server/lib/backup.js         → snapshot SQLite cada 6h en {DATA_DIR}/backups/
+server/lib/mp-signature.js   → verify() HMAC del webhook MP
+server/lib/chilexpress.js    → Cliente API Chilexpress
+server/lib/shipping-fallback.js → Tarifas fijas por región cuando no hay API key
+admin.html / admin.css / admin.js → Single-page admin (Alpine.js 3)
+scripts/seed-from-datajs.js  → Migración inicial data.js → SQLite (corre al boot si DB vacía)
+scripts/create-user.js       → CLI: crear/resetear usuario admin
+Dockerfile                   → Node 20 alpine + VOLUME ["/data"]
+.env.example                 → Plantilla de credenciales
+PAGOS_Y_ENVIOS.md            → Guía MP + Chilexpress
+docs/                        → PDF de solicitud de credenciales para cliente
 ```
+
+### Volumen persistente `/data` (CRÍTICO)
+
+En producción **debe** montarse un volumen Docker en `/data`. Sin él:
+- La DB SQLite (`/data/iphoneup.db`) se pierde en cada redeploy
+- Los uploads de admin (`/data/uploads/products/*.webp`) desaparecen
+- Los backups (`/data/backups/*.db`) no persisten
+
+En local default es `./data` (ver env `DATA_DIR`).
 
 ### API endpoints
 
+**Públicos:**
 | Método | Ruta                                       | Qué hace                                   |
 |--------|--------------------------------------------|--------------------------------------------|
-| GET    | `/api/health`                              | Healthcheck + diagnóstico de credenciales  |
+| GET    | `/api/health`                              | Healthcheck + diagnóstico (build SHA, db count) |
+| GET    | `/data.js`                                 | Catálogo dinámico desde DB con ETag (reemplaza el archivo físico) |
 | GET    | `/api/chilexpress/regions`                 | Regiones de Chile                          |
 | GET    | `/api/chilexpress/coverage?regionCode=RM`  | Comunas de una región                      |
-| POST   | `/api/chilexpress/quote`                   | Cotiza envío `{destinationCountyCode, items}` |
-| POST   | `/api/mercadopago/preference`              | Crea orden + Preference (Checkout Pro)     |
-| POST   | `/api/mercadopago/webhook`                 | Webhook de notificaciones MP               |
+| POST   | `/api/chilexpress/quote`                   | Cotiza envío                               |
+| POST   | `/api/mercadopago/preference`              | Crea orden + Preference                    |
+| POST   | `/api/mercadopago/webhook`                 | Webhook con firma HMAC (descuenta stock al `approved`) |
 | GET    | `/api/orders/:id`                          | Detalle de orden (sin datos sensibles)     |
+| GET    | `/uploads/*`                               | Imágenes subidas desde admin (cache inmutable) |
+
+**Admin (`/api/admin/*`, requiere sesión salvo `/auth/*`):**
+| Método | Ruta                                       | Qué hace                                   |
+|--------|--------------------------------------------|--------------------------------------------|
+| POST   | `/api/admin/auth/login`                    | Login (rate-limit 10/15min)                |
+| POST   | `/api/admin/auth/logout`                   | Logout                                     |
+| GET    | `/api/admin/auth/me`                       | Sesión actual                              |
+| GET    | `/api/admin/products`                      | Lista productos + variants con stock       |
+| PATCH  | `/api/admin/products/:id`                  | Editar producto (hidden, line, etc.)       |
+| PATCH  | `/api/admin/products/variants/:id`         | Editar variant (precio, sku, activo)       |
+| POST   | `/api/admin/products/variants/:id/stock`   | Ajuste de stock con motivo                 |
+| POST   | `/api/admin/products/variants/bulk-price`  | Ajuste masivo por scope                    |
+| CRUD   | `/api/admin/coupons`                       | Cupones                                    |
+| GET    | `/api/admin/orders`                        | Lista órdenes con filtros                  |
+| GET/POST/PATCH | `/api/admin/users`                 | Gestión de usuarios admin                  |
+| GET    | `/api/admin/audit-log`                     | Historial de mutaciones                    |
+| POST   | `/api/admin/uploads/image`                 | Sube imagen → WebP en `/data/uploads/`     |
+| GET    | `/api/admin/dashboard`                     | KPIs + sparkline + top productos + actividad |
 
 ## Run locally
 
 ```bash
 npm install
-cp .env.example .env   # completar con credenciales de sandbox MP + Chilexpress
+cp .env.example .env   # completar con SESSION_SECRET, ADMIN_BOOTSTRAP_*, MP, Chilexpress
 npm start              # http://localhost:8080
+# Admin: http://localhost:8080/admin (login con ADMIN_BOOTSTRAP_EMAIL/PASSWORD)
 ```
 
-`python -m http.server` ya no alcanza — el frontend depende de los endpoints `/api/*`.
+Primer boot:
+1. Crea `./data/iphoneup.db` y corre migraciones.
+2. Si la tabla `products` está vacía, ejecuta el seed desde `data.js`.
+3. Si no hay usuarios activos y `ADMIN_BOOTSTRAP_*` están definidos, crea el primer admin.
+4. Si existe `server/data/orders.json` legacy, lo migra a SQLite y lo renombra a `.migrated.bak`.
+
+CLI útil: `node scripts/create-user.js <email> <password> [name] [role]` para crear/resetear admins.
 
 ## Deploy
 
-Pushing to `main` triggers autodeploy en Dokploy. **Build Type = Dockerfile** (antes era Static). Puerto interno 8080. Variables de entorno requeridas: `PORT`, `PUBLIC_URL`, `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`, `CHILEXPRESS_API_KEY_RATING`, `CHILEXPRESS_API_KEY_GEO`, `CHILEXPRESS_ORIGIN_COUNTY_CODE`, `CHILEXPRESS_ORIGIN_REGION_CODE`. Ver `PAGOS_Y_ENVIOS.md` para el detalle.
+Pushing to `main` triggers autodeploy en Dokploy. **Build Type = Dockerfile**. Puerto interno 8080.
+
+**Volumen Docker `/data` (OBLIGATORIO):** sin él la DB y los uploads se pierden en cada redeploy.
+
+**Variables de entorno requeridas:**
+- Server: `PORT`, `PUBLIC_URL`, `DATA_DIR=/data`
+- Admin: `SESSION_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `USE_DB_CATALOG=true`
+- Mercado Pago: `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`, `MP_WEBHOOK_SECRET`
+- Chilexpress (opcional, sin esto usa fallback): `CHILEXPRESS_API_KEY_RATING`, `CHILEXPRESS_API_KEY_GEO`, `CHILEXPRESS_ORIGIN_COUNTY_CODE`, `CHILEXPRESS_ORIGIN_REGION_CODE`
+
+Ver `PAGOS_Y_ENVIOS.md` para el detalle.
 
 ## Architecture
 
@@ -177,6 +242,30 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
   - OG/canonical/JSON-LD URLs are absolute (`https://iphoneup.cl/...`).
 - **Cache headers** — `server/index.js` sets `Cache-Control` per file type: 30 days for images/fonts, `no-cache` (ETag revalidation) for HTML/CSS/JS so `data.js` price edits and deploys appear immediately. Filenames aren't content-hashed → **don't long-cache JS/CSS**.
 
+## Admin "Neon Console"
+
+`/admin` carga `admin.html` que es un SPA single-file con Alpine.js. Misma estética Dark Neon Premium que el público. Login en `/admin/login` (mismo HTML, vista distinta vía `x-show`).
+
+**Capas de admin:**
+- **UI**: `admin.html` (markup + Alpine bindings) + `admin.css` (sistema visual) + `admin.js` (estado reactivo + fetch). Alpine carga de CDN — no hay build step.
+- **API**: `server/routes/admin/*.js` montado en `/api/admin`. Middleware `requireAuth` redirige a login si no hay sesión válida.
+- **Sesiones**: `express-session` + `better-sqlite3-session-store`. Cookie httpOnly, Secure en prod, SameSite=Lax, 7 días.
+- **Audit**: toda mutación llama `audit.log(req, {action, entity_type, entity_id, before, after})`. Vista en Settings → Audit log.
+- **Stock**: cualquier cambio pasa por `stock.adjust({variant_id, delta, reason, user_id, note})` que escribe a `variants.stock` y graba en `stock_movements`. El webhook MP llama `stock.commitOrderSale(order)` al `approved`.
+- **Catálogo dinámico**: `/data.js` se sirve desde DB con ETag — al cambiar un precio en admin el navegador hace 304 hasta que cambia el hash. Cuando `USE_DB_CATALOG=false`, sirve el archivo físico (fallback de emergencia).
+
+**Vistas del admin** (todas en `admin.html`, switching con `view` state):
+1. Dashboard — KPIs en vivo + sparkline + top productos + feed de actividad
+2. Catálogo — tabla densa con inline edit de precio (doble-click) y stock (click en pill)
+3. Stock — pivote modelos × storages
+4. Cupones — cards tipo ticket, CRUD completo
+5. Órdenes — lista filtrable + drawer con detalle + WhatsApp deep-link
+6. Settings — tabs Usuarios / Audit log / Sistema
+
+**Atajos**: `⌘K` command palette, `G+P/O/S/C/D/U` navegación, `Esc` cerrar drawer/palette.
+
+**Bootstrap del primer usuario**: si la tabla `users` está vacía al boot y existen `ADMIN_BOOTSTRAP_EMAIL/PASSWORD`, se crea automáticamente. Después se pueden borrar esas env vars; el script `npm run create-user` permite agregar más.
+
 ## Things to be careful with
 
 - **Don't change the cart shape** without updating `app.js`, `product.js`, `checkout.js` **and** `server/routes/mercadopago.js`. The schema `{model, storage, price, sealed, phoneId, img}` is the cross-page + cross-stack contract.
@@ -188,6 +277,11 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 - **Si tocas el backend, valida con `/api/health`** antes de pushear — confirma que las env vars y las dependencias estén OK.
 - **No agregar dependencias npm pesadas** — el Dockerfile hace `npm install --omit=dev` cada build. Cada paquete extra es tiempo de deploy. Hoy: `express`, `dotenv`, `mercadopago` (+ `node-fetch` declarado pero **sin usar** — el código usa el `fetch` global de Node 20). Para convertir imágenes usa `sharp` con `--no-save`, nunca como dependencia del repo.
 - **MP webhook responde 200 inmediato** (`server/routes/mercadopago.js`) y procesa después — si el procesamiento lanza, MP no reintenta. Si agregas lógica crítica en el webhook (emails, etc.), considera reintentos o cola.
+- **El webhook ahora valida firma HMAC** (`server/lib/mp-signature.js`). Si `MP_WEBHOOK_SECRET` no está configurado, el modo es permisivo (acepta todo) — en producción **siempre** configurarlo.
+- **Stock se descuenta solo cuando el pago pasa a `approved`** (no en `pending`/`in_process`). La función `stock.commitOrderSale()` es idempotente por `order_id` — múltiples webhooks del mismo pago no descuentan stock varias veces.
+- **No edites `data.js` físico** después de migrar a DB — el archivo queda como snapshot de respaldo pero la fuente de verdad es la DB. Edita desde el admin o vía `/api/admin/*`.
+- **El bootstrap user solo se crea si NO hay usuarios activos.** Después de tener al menos uno, las env vars `ADMIN_BOOTSTRAP_*` se ignoran. Para resetear, usa `npm run create-user`.
+- **Sessions persisten en la misma DB.** Logout invalida la sesión inmediatamente; cambiar `SESSION_SECRET` invalida TODAS las sesiones (forzar logout global).
 
 ## Reference: design source
 

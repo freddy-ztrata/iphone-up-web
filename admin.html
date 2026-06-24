@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iPhone UP · Neon Console</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="icon" href="assets/logo-mark.jpg" />
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="admin.css" />
+<script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body class="ac-body" x-data="adminApp()" x-init="init()" x-cloak>
+
+<!-- ============== LOGIN ============== -->
+<div class="ac-login" x-show="!session">
+  <div class="ac-login-bg" aria-hidden="true">
+    <svg class="neon-waves" viewBox="0 0 1200 800" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="aw" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#A4E83A" stop-opacity="0" />
+          <stop offset="50%" stop-color="#A4E83A" stop-opacity="0.7" />
+          <stop offset="100%" stop-color="#A4E83A" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <g id="wave-paths-login"></g>
+    </svg>
+  </div>
+  <div class="ac-login-card">
+    <img src="assets/logo-trimmed.webp" alt="iPhone UP" class="ac-login-logo" />
+    <div class="ac-login-eyebrow">NEON CONSOLE</div>
+    <h1>Bienvenido</h1>
+    <p class="ac-login-sub">Ingresa para administrar tu tienda.</p>
+    <form @submit.prevent="login()" class="ac-login-form">
+      <label class="ac-field">
+        <span>Email</span>
+        <input type="email" x-model="loginForm.email" required autocomplete="username" autofocus />
+      </label>
+      <label class="ac-field">
+        <span>Contraseña</span>
+        <input type="password" x-model="loginForm.password" required autocomplete="current-password" />
+      </label>
+      <button type="submit" class="ac-btn-primary" :disabled="loggingIn">
+        <span x-show="!loggingIn">Entrar</span>
+        <span x-show="loggingIn">Verificando…</span>
+      </button>
+      <p class="ac-error" x-show="loginError" x-text="loginError"></p>
+    </form>
+    <a href="/" class="ac-login-back">← Volver al sitio público</a>
+  </div>
+</div>
+
+<!-- ============== MAIN APP ============== -->
+<div class="ac-app" x-show="session">
+
+  <!-- Sidebar -->
+  <aside class="ac-sidebar" :class="{ 'ac-sidebar-expanded': sidebarExpanded }">
+    <button class="ac-sidebar-toggle" @click="sidebarExpanded = !sidebarExpanded" :aria-expanded="sidebarExpanded" aria-label="Expandir/colapsar menú">
+      <img src="assets/logo-mark.jpg" alt="UP" />
+    </button>
+    <nav class="ac-nav">
+      <template x-for="item in nav" :key="item.id">
+        <button class="ac-nav-item"
+                :class="{ 'active': view === item.id }"
+                @click="goto(item.id)"
+                :title="item.label">
+          <span class="ac-nav-icon" x-html="item.icon"></span>
+          <span class="ac-nav-label" x-text="item.label"></span>
+        </button>
+      </template>
+    </nav>
+    <div class="ac-sidebar-foot">
+      <button class="ac-nav-item" @click="logout()" title="Cerrar sesión">
+        <span class="ac-nav-icon">⎋</span>
+        <span class="ac-nav-label">Salir</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Topbar + Content -->
+  <div class="ac-main">
+    <header class="ac-topbar">
+      <div class="ac-breadcrumb">
+        <span x-text="nav.find(n => n.id === view)?.label || 'Dashboard'"></span>
+      </div>
+      <button class="ac-search" @click="openPalette()">
+        <span class="ac-search-icon">⌕</span>
+        <span class="ac-search-placeholder">Buscar productos, órdenes, comandos…</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <div class="ac-user">
+        <span class="ac-user-name" x-text="session?.name || session?.email"></span>
+        <span class="ac-user-avatar" x-text="(session?.email || '?').charAt(0).toUpperCase()"></span>
+      </div>
+    </header>
+
+    <main class="ac-content">
+
+      <!-- DASHBOARD -->
+      <section x-show="view === 'dashboard'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">
+              <span x-text="greeting()"></span>, <span x-text="session?.name || 'Admin'"></span>
+              <span class="ac-page-emoji" x-text="greetingEmoji()"></span>
+            </h1>
+            <p class="ac-page-sub" x-text="todayLabel()"></p>
+          </div>
+        </header>
+
+        <div class="ac-kpis">
+          <article class="ac-kpi ac-kpi-primary">
+            <div class="ac-kpi-label">Ventas hoy</div>
+            <div class="ac-kpi-value" x-text="dashboard ? fmtCLP(dashboard.sales.today.total) : '—'"></div>
+            <div class="ac-kpi-meta">
+              <span x-text="dashboard ? dashboard.sales.today.count + ' órdenes' : ''"></span>
+            </div>
+            <svg class="ac-kpi-spark" viewBox="0 0 200 50" preserveAspectRatio="none">
+              <polyline :points="sparkPoints" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" />
+            </svg>
+          </article>
+          <article class="ac-kpi">
+            <div class="ac-kpi-label">Pendientes</div>
+            <div class="ac-kpi-value" x-text="dashboard?.pending ?? '—'"></div>
+            <div class="ac-kpi-meta">órdenes esperando</div>
+          </article>
+          <article class="ac-kpi">
+            <div class="ac-kpi-label">Stock crítico</div>
+            <div class="ac-kpi-value" x-text="dashboard ? dashboard.critical_stock.length : '—'"></div>
+            <div class="ac-kpi-meta">
+              <a href="#" @click.prevent="goto('stock')">Ver alertas →</a>
+            </div>
+          </article>
+          <article class="ac-kpi">
+            <div class="ac-kpi-label">Últimos 30 días</div>
+            <div class="ac-kpi-value" x-text="dashboard ? fmtCLP(dashboard.sales.last30.total) : '—'"></div>
+            <div class="ac-kpi-meta" x-text="dashboard ? dashboard.sales.last30.count + ' órdenes' : ''"></div>
+          </article>
+        </div>
+
+        <div class="ac-grid-2">
+          <article class="ac-panel">
+            <header class="ac-panel-head"><h3>Top productos · 30 días</h3></header>
+            <div class="ac-top-list">
+              <template x-for="(t, i) in dashboard?.top_products || []" :key="i">
+                <div class="ac-top-row">
+                  <span class="ac-top-rank" x-text="i+1"></span>
+                  <span class="ac-top-name" x-text="t.name"></span>
+                  <span class="ac-top-qty" x-text="t.qty + ' u.'"></span>
+                </div>
+              </template>
+              <p class="ac-empty" x-show="!dashboard?.top_products?.length">Aún no hay ventas en este período.</p>
+            </div>
+          </article>
+
+          <article class="ac-panel">
+            <header class="ac-panel-head"><h3>Actividad reciente</h3></header>
+            <div class="ac-activity">
+              <template x-for="ev in dashboard?.recent_activity || []" :key="ev.created_at + ev.action">
+                <div class="ac-activity-row">
+                  <span class="ac-activity-dot"></span>
+                  <span class="ac-activity-text">
+                    <strong x-text="ev.user_name || ev.user_email || 'Sistema'"></strong>
+                    <span x-text="describeActivity(ev)"></span>
+                  </span>
+                  <span class="ac-activity-time" x-text="timeAgo(ev.created_at)"></span>
+                </div>
+              </template>
+              <p class="ac-empty" x-show="!dashboard?.recent_activity?.length">Sin actividad reciente.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- CATÁLOGO -->
+      <section x-show="view === 'catalog'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Catálogo</h1>
+            <p class="ac-page-sub" x-text="products.length + ' productos · ' + visibleVariantCount() + ' variantes'"></p>
+          </div>
+          <div class="ac-page-actions">
+            <button class="ac-btn-ghost" @click="bulkPriceOpen = true">↗ Ajuste masivo</button>
+            <button class="ac-btn-primary" @click="newProduct()">+ Nuevo producto</button>
+          </div>
+        </header>
+
+        <div class="ac-table" :class="{ loading: loadingProducts }">
+          <div class="ac-table-head">
+            <div class="ac-th ac-th-img"></div>
+            <div class="ac-th ac-th-line">Línea</div>
+            <div class="ac-th ac-th-name">Modelo</div>
+            <div class="ac-th ac-th-storage">Storage</div>
+            <div class="ac-th ac-th-price">Precio</div>
+            <div class="ac-th ac-th-stock">Stock</div>
+            <div class="ac-th ac-th-state">Estado</div>
+            <div class="ac-th ac-th-actions"></div>
+          </div>
+          <template x-for="product in products" :key="product.id">
+            <template x-for="(model, mIdx) in product.models" :key="product.id + '-' + model.model_id">
+              <template x-for="(storage, sIdx) in model.storages" :key="product.id + '-' + model.model_id + '-' + storage.variant_id">
+                <div class="ac-tr" :class="{ 'ac-tr-hidden': product.hidden, 'ac-tr-stock-low': storage.stock <= 2 }">
+                  <div class="ac-td ac-td-img">
+                    <img :src="model.img || product.img" alt="" />
+                  </div>
+                  <div class="ac-td ac-td-line">
+                    <span class="ac-line-pill" x-text="product.line"></span>
+                  </div>
+                  <div class="ac-td ac-td-name">
+                    <span x-text="model.name"></span>
+                    <span class="ac-sealed-tag" x-show="model.sealed">SELLADO</span>
+                  </div>
+                  <div class="ac-td ac-td-storage" x-text="storage.s"></div>
+                  <div class="ac-td ac-td-price">
+                    <input class="ac-inline-input ac-mono"
+                           type="number"
+                           :value="storage.p"
+                           @change="updateVariantPrice(storage.variant_id, $event.target.value, storage)"
+                           @keydown.enter="$event.target.blur()" />
+                  </div>
+                  <div class="ac-td ac-td-stock">
+                    <button class="ac-stock-pill"
+                            :class="{ low: storage.stock <= 2, zero: storage.stock === 0 }"
+                            @click="openStockPopover(storage)"
+                            x-text="storage.stock"></button>
+                  </div>
+                  <div class="ac-td ac-td-state">
+                    <span class="ac-state-pill"
+                          :class="{ 'state-hidden': product.hidden }"
+                          x-text="product.hidden ? 'Oculto' : 'Visible'"></span>
+                  </div>
+                  <div class="ac-td ac-td-actions">
+                    <button class="ac-icon-btn" @click="openProductDetail(product.id)" title="Editar">✎</button>
+                    <button class="ac-icon-btn" @click="toggleHidden(product)" :title="product.hidden ? 'Mostrar' : 'Ocultar'">
+                      <span x-text="product.hidden ? '◯' : '●'"></span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </template>
+          </template>
+          <p class="ac-empty" x-show="!loadingProducts && products.length === 0">
+            Sin productos. Crea uno para empezar.
+          </p>
+        </div>
+      </section>
+
+      <!-- STOCK -->
+      <section x-show="view === 'stock'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Stock</h1>
+            <p class="ac-page-sub">Cantidades por variante. Click en una celda para ajustar.</p>
+          </div>
+        </header>
+
+        <div class="ac-stock-grid">
+          <template x-for="product in products.filter(p => !p.hidden && p.id !== 0)" :key="product.id">
+            <div class="ac-stock-card">
+              <h3 x-text="'iPhone ' + product.line"></h3>
+              <table class="ac-stock-table">
+                <thead>
+                  <tr><th>Modelo</th><th>64GB</th><th>128GB</th><th>256GB</th><th>512GB</th></tr>
+                </thead>
+                <tbody>
+                  <template x-for="model in product.models" :key="model.model_id">
+                    <tr>
+                      <td x-text="model.name.replace('iPhone ' + product.line, '').trim() || 'Base'"></td>
+                      <template x-for="cap in ['64GB','128GB','256GB','512GB']" :key="cap">
+                        <td>
+                          <template x-if="model.storages.find(s => s.s === cap)">
+                            <button class="ac-stock-cell"
+                                    :class="{ low: model.storages.find(s => s.s === cap).stock <= 2, zero: model.storages.find(s => s.s === cap).stock === 0 }"
+                                    @click="openStockPopover(model.storages.find(s => s.s === cap))"
+                                    x-text="model.storages.find(s => s.s === cap).stock"></button>
+                          </template>
+                          <template x-if="!model.storages.find(s => s.s === cap)">
+                            <span class="ac-stock-na">—</span>
+                          </template>
+                        </td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- CUPONES -->
+      <section x-show="view === 'coupons'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Cupones</h1>
+            <p class="ac-page-sub" x-text="coupons.length + ' cupones'"></p>
+          </div>
+          <button class="ac-btn-primary" @click="newCoupon()">+ Nuevo cupón</button>
+        </header>
+
+        <div class="ac-coupons-grid">
+          <template x-for="c in coupons" :key="c.id">
+            <article class="ac-coupon" :class="{ inactive: !c.is_active || isCouponExpired(c) }">
+              <div class="ac-coupon-left">
+                <div class="ac-coupon-discount" x-text="c.type === 'percent' ? c.value + '%' : fmtCLP(c.value)"></div>
+                <div class="ac-coupon-discount-label">descuento</div>
+              </div>
+              <div class="ac-coupon-perforation"></div>
+              <div class="ac-coupon-body">
+                <div class="ac-coupon-code ac-mono" x-text="c.code"></div>
+                <div class="ac-coupon-meta">
+                  <span x-text="couponValidityLabel(c)"></span>
+                  <span x-show="c.max_uses != null">· <span x-text="c.used_count + '/' + c.max_uses"></span> usos</span>
+                </div>
+                <div class="ac-coupon-actions">
+                  <button class="ac-icon-btn" @click="editCoupon(c)" title="Editar">✎</button>
+                  <button class="ac-icon-btn" @click="toggleCoupon(c)" :title="c.is_active ? 'Pausar' : 'Activar'">
+                    <span x-text="c.is_active ? '⏸' : '▶'"></span>
+                  </button>
+                  <button class="ac-icon-btn ac-icon-danger" @click="deleteCoupon(c)" title="Eliminar">✕</button>
+                </div>
+              </div>
+            </article>
+          </template>
+          <p class="ac-empty" x-show="coupons.length === 0">
+            Sin cupones aún. Crea uno para empezar a hacer promociones.
+          </p>
+        </div>
+      </section>
+
+      <!-- ÓRDENES -->
+      <section x-show="view === 'orders'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Órdenes</h1>
+            <p class="ac-page-sub" x-text="orders.length + ' órdenes'"></p>
+          </div>
+          <div class="ac-page-actions">
+            <select class="ac-select" x-model="orderFilter" @change="loadOrders()">
+              <option value="">Todos los estados</option>
+              <option value="pending">Pendientes</option>
+              <option value="approved">Aprobados</option>
+              <option value="rejected">Rechazados</option>
+              <option value="cancelled">Cancelados</option>
+            </select>
+          </div>
+        </header>
+
+        <div class="ac-table">
+          <div class="ac-table-head">
+            <div class="ac-th">ID</div>
+            <div class="ac-th">Cliente</div>
+            <div class="ac-th">Total</div>
+            <div class="ac-th">Estado</div>
+            <div class="ac-th">Fecha</div>
+          </div>
+          <template x-for="o in orders" :key="o.id">
+            <div class="ac-tr ac-tr-order" @click="openOrderDetail(o.id)">
+              <div class="ac-td ac-mono" x-text="o.id"></div>
+              <div class="ac-td" x-text="(o.buyer && (o.buyer.name || o.buyer.email)) || '—'"></div>
+              <div class="ac-td ac-mono" x-text="fmtCLP(o.total)"></div>
+              <div class="ac-td">
+                <span class="ac-state-pill" :class="'state-' + o.status" x-text="o.status"></span>
+              </div>
+              <div class="ac-td" x-text="timeAgo(o.created_at)"></div>
+            </div>
+          </template>
+          <p class="ac-empty" x-show="orders.length === 0">No hay órdenes con este filtro.</p>
+        </div>
+      </section>
+
+      <!-- AUDIT LOG / USUARIOS -->
+      <section x-show="view === 'settings'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Configuración</h1>
+          </div>
+        </header>
+
+        <div class="ac-tabs">
+          <button class="ac-tab" :class="{ active: settingsTab === 'users' }" @click="settingsTab = 'users'">Usuarios</button>
+          <button class="ac-tab" :class="{ active: settingsTab === 'audit' }" @click="settingsTab = 'audit'; loadAudit()">Audit log</button>
+          <button class="ac-tab" :class="{ active: settingsTab === 'info' }" @click="settingsTab = 'info'">Sistema</button>
+        </div>
+
+        <div x-show="settingsTab === 'users'">
+          <button class="ac-btn-primary" @click="newUser()">+ Nuevo usuario</button>
+          <div class="ac-users-list">
+            <template x-for="u in users" :key="u.id">
+              <div class="ac-user-row">
+                <span class="ac-user-avatar" x-text="(u.name || u.email).charAt(0).toUpperCase()"></span>
+                <div class="ac-user-info">
+                  <strong x-text="u.name || u.email"></strong>
+                  <span x-text="u.email"></span>
+                </div>
+                <span class="ac-role-pill" x-text="u.role"></span>
+                <span class="ac-state-pill" :class="u.is_active ? 'state-approved' : 'state-rejected'"
+                      x-text="u.is_active ? 'activo' : 'inactivo'"></span>
+                <button class="ac-icon-btn" @click="editUser(u)">✎</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div x-show="settingsTab === 'audit'">
+          <div class="ac-audit-list">
+            <template x-for="ev in audit" :key="ev.id">
+              <div class="ac-audit-row">
+                <div class="ac-audit-time" x-text="timeAgo(ev.created_at)"></div>
+                <div class="ac-audit-text">
+                  <strong x-text="ev.user_name || ev.user_email || 'Sistema'"></strong>
+                  <span x-text="' ' + ev.action + ' ' + ev.entity_type + (ev.entity_id ? ' #' + ev.entity_id : '')"></span>
+                  <details x-show="ev.before || ev.after" class="ac-audit-diff">
+                    <summary>ver diff</summary>
+                    <pre x-text="JSON.stringify({before: ev.before, after: ev.after}, null, 2)"></pre>
+                  </details>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div x-show="settingsTab === 'info'">
+          <pre class="ac-system-info" x-text="systemInfo ? JSON.stringify(systemInfo, null, 2) : 'cargando…'"></pre>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========== DRAWER (detalle de producto / cupón / orden) ========== -->
+  <div class="ac-drawer-overlay" x-show="drawer.open" @click="closeDrawer()"></div>
+  <aside class="ac-drawer" :class="{ open: drawer.open }">
+    <header class="ac-drawer-head">
+      <h2 x-text="drawer.title"></h2>
+      <button class="ac-icon-btn" @click="closeDrawer()">✕</button>
+    </header>
+    <div class="ac-drawer-body" x-html="drawer.html"></div>
+  </aside>
+
+  <!-- ========== COMMAND PALETTE ========== -->
+  <div class="ac-palette-overlay" x-show="palette.open" @click.self="palette.open = false">
+    <div class="ac-palette">
+      <input type="text"
+             x-model="palette.query"
+             @input="filterPalette()"
+             @keydown.escape.prevent="palette.open = false"
+             @keydown.enter.prevent="runPalette()"
+             @keydown.down.prevent="palette.idx = Math.min(palette.idx + 1, palette.results.length - 1)"
+             @keydown.up.prevent="palette.idx = Math.max(palette.idx - 1, 0)"
+             placeholder="Buscar productos, comandos…  Ej: 'subir 5% iphone 15'"
+             class="ac-palette-input"
+             x-ref="paletteInput" />
+      <div class="ac-palette-results">
+        <template x-for="(r, i) in palette.results" :key="i">
+          <div class="ac-palette-result" :class="{ active: i === palette.idx }" @click="palette.idx = i; runPalette()">
+            <span class="ac-palette-icon" x-text="r.icon || '→'"></span>
+            <div>
+              <div class="ac-palette-label" x-text="r.label"></div>
+              <div class="ac-palette-hint" x-text="r.hint" x-show="r.hint"></div>
+            </div>
+          </div>
+        </template>
+        <p class="ac-empty" x-show="palette.results.length === 0">Nada coincide.</p>
+      </div>
+      <footer class="ac-palette-foot">
+        <span>↵ Ejecutar</span><span>↑↓ Navegar</span><span>Esc Cerrar</span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ========== TOASTS ========== -->
+  <div class="ac-toasts">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="ac-toast" :class="'ac-toast-' + (t.kind || 'info')">
+        <span x-text="t.msg"></span>
+        <button x-show="t.undo" @click="t.undo(); removeToast(t.id)" class="ac-toast-undo">Deshacer</button>
+      </div>
+    </template>
+  </div>
+
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

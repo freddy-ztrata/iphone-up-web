@@ -1,0 +1,91 @@
+// Dashboard: KPIs y series para gráficos.
+
+const express = require("express");
+const db = require("../../db");
+
+const router = express.Router();
+
+router.get("/", (_req, res) => {
+  // Ventas hoy / 7d / 30d (suma de orders con status approved)
+  const salesToday = db.prepare(`
+    SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count
+    FROM orders WHERE status = 'approved' AND date(created_at) = date('now', 'localtime')
+  `).get();
+  const sales7 = db.prepare(`
+    SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count
+    FROM orders WHERE status = 'approved' AND created_at >= datetime('now', '-7 days')
+  `).get();
+  const sales30 = db.prepare(`
+    SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count
+    FROM orders WHERE status = 'approved' AND created_at >= datetime('now', '-30 days')
+  `).get();
+
+  // Órdenes pendientes
+  const pending = db.prepare(`
+    SELECT COUNT(*) AS n FROM orders WHERE status IN ('pending','in_process')
+  `).get();
+
+  // Stock crítico (variants con stock <= 2 y is_active)
+  const critical = db.prepare(`
+    SELECT v.id, v.storage, v.stock, m.name AS model, p.line, p.year
+    FROM variants v
+    JOIN product_models m ON m.id = v.model_id
+    JOIN products p ON p.id = m.product_id
+    WHERE v.is_active = 1 AND p.hidden = 0 AND v.stock <= 2
+    ORDER BY v.stock ASC, p.id DESC
+    LIMIT 20
+  `).all();
+
+  // Sparkline: ventas por día últimos 30 días
+  const sparkline = db.prepare(`
+    SELECT date(created_at) AS day, COALESCE(SUM(total), 0) AS total
+    FROM orders
+    WHERE status = 'approved' AND created_at >= datetime('now', '-30 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `).all();
+
+  // Top productos últimos 30 días (por order_items_json — aproximación)
+  const topRaw = db.prepare(`
+    SELECT items_json FROM orders
+    WHERE status = 'approved' AND created_at >= datetime('now', '-30 days')
+  `).all();
+  const counts = {};
+  for (const r of topRaw) {
+    try {
+      const items = JSON.parse(r.items_json || "[]");
+      for (const it of items) {
+        const key = `${it.model} ${it.storage}`;
+        counts[key] = (counts[key] || 0) + (Number(it.qty) || 1);
+      }
+    } catch {}
+  }
+  const top = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, qty]) => ({ name, qty }));
+
+  // Actividad reciente (audit log resumido)
+  const recent = db.prepare(`
+    SELECT al.action, al.entity_type, al.entity_id, al.created_at, u.name AS user_name, u.email AS user_email
+    FROM audit_log al
+    LEFT JOIN users u ON u.id = al.user_id
+    ORDER BY al.created_at DESC
+    LIMIT 20
+  `).all();
+
+  res.json({
+    sales: {
+      today: salesToday,
+      last7: sales7,
+      last30: sales30,
+    },
+    pending: pending.n,
+    critical_stock: critical,
+    sparkline,
+    top_products: top,
+    recent_activity: recent,
+  });
+});
+
+module.exports = router;
