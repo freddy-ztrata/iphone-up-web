@@ -1,9 +1,8 @@
 -- iPhone UP — Schema inicial
 -- Idempotente: todas las CREATE usan IF NOT EXISTS.
-
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-PRAGMA synchronous = NORMAL;
+-- Los PRAGMA de conexión (journal_mode=WAL, foreign_keys=ON, synchronous=NORMAL)
+-- se aplican en server/db.js antes de correr migraciones — NO van acá porque
+-- SQLite no permite cambiar safety level dentro de una transacción.
 
 -- ============================================================
 -- USERS / SESSIONS
