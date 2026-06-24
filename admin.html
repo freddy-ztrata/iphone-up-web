@@ -440,7 +440,7 @@
   </aside>
 
   <!-- ========== COMMAND PALETTE ========== -->
-  <div class="ac-palette-overlay" x-show="palette.open" @click.self="palette.open = false">
+  <div class="ac-palette-overlay" x-show="palette.open && session" @click.self="palette.open = false">
     <div class="ac-palette">
       <input type="text"
              x-model="palette.query"

@@ -421,6 +421,7 @@ function adminApp() {
 
     // ----- Command palette -----
     openPalette() {
+      if (!this.session) return;     // defensa extra: nunca abrir sin login
       this.palette.open = true;
       this.palette.query = "";
       this.palette.results = this.allPaletteItems();
