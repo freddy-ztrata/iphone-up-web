@@ -242,8 +242,8 @@ function renderRelated() {
   const grid = $("#related-grid");
   grid.innerHTML = "";
   const id = state.phone.id;
-  // pick the closest 3 lines (above and below)
-  const others = CATALOG.filter(p => p.id !== id)
+  // pick the closest 3 lines (above and below) — excludes hidden test products
+  const others = CATALOG.filter(p => p.id !== id && !p.hidden)
     .sort((a, b) => Math.abs(a.id - id) - Math.abs(b.id - id))
     .slice(0, 3);
   others.forEach(p => {

@@ -3,65 +3,73 @@
 // Sellado: solo iPhone 17. Resto seminuevo A+.
 
 window.CATALOG = [
+  // Producto oculto para pruebas de pago (no aparece en home; accesible vía /product.html?id=0)
+  {
+    id: 0, line: "TEST", year: 2026, img: "assets/iphones/iphone-11.webp", hidden: true,
+    models: [
+      { name: "Producto de prueba", img: "assets/iphones/iphone-11.webp",
+        storages: [{s:"TEST", p:1000}], sealed:false },
+    ],
+  },
   {
     id: 11, line: "11", year: 2019, img: "assets/iphones/iphone-11.webp",
     models: [
-      { name: "iPhone 11",         img: "assets/iphones/iphone-11.webp",          storages: [{s:"64GB",p:180000},{s:"128GB",p:230000},{s:"256GB",p:270000}], sealed:false },
-      { name: "iPhone 11 Pro",     img: "assets/iphones/variants/11-pro.webp",    storages: [{s:"64GB",p:220000},{s:"128GB",p:260000},{s:"256GB",p:300000}], sealed:false },
-      { name: "iPhone 11 Pro Max", img: "assets/iphones/variants/11-promax.webp", storages: [{s:"64GB",p:240000},{s:"256GB",p:280000},{s:"512GB",p:330000}], sealed:false },
+      { name: "iPhone 11",         img: "assets/iphones/iphone-11.webp",          storages: [{s:"64GB",p:150000},{s:"128GB",p:200000},{s:"256GB",p:240000},{s:"512GB",p:300000}], sealed:false },
+      { name: "iPhone 11 Pro",     img: "assets/iphones/variants/11-pro.webp",    storages: [{s:"64GB",p:190000},{s:"128GB",p:230000},{s:"256GB",p:270000},{s:"512GB",p:330000}], sealed:false },
+      { name: "iPhone 11 Pro Max", img: "assets/iphones/variants/11-promax.webp", storages: [{s:"64GB",p:210000},{s:"256GB",p:250000},{s:"512GB",p:300000}], sealed:false },
     ],
   },
   {
     id: 12, line: "12", year: 2020, img: "assets/iphones/iphone-12.webp",
     models: [
-      { name: "iPhone 12 Mini",    img: "assets/iphones/variants/12-mini.webp",   storages: [{s:"64GB",p:220000},{s:"128GB",p:270000},{s:"256GB",p:310000}], sealed:false },
-      { name: "iPhone 12",         img: "assets/iphones/iphone-12.webp",          storages: [{s:"64GB",p:250000},{s:"128GB",p:290000},{s:"256GB",p:350000}], sealed:false },
-      { name: "iPhone 12 Pro",     img: "assets/iphones/variants/12-pro.webp",    storages: [{s:"128GB",p:340000},{s:"256GB",p:380000},{s:"512GB",p:430000}], sealed:false },
-      { name: "iPhone 12 Pro Max", img: "assets/iphones/variants/12-promax.webp", storages: [{s:"128GB",p:400000},{s:"256GB",p:450000},{s:"512GB",p:490000}], sealed:false },
+      { name: "iPhone 12 Mini",    img: "assets/iphones/variants/12-mini.webp",   storages: [{s:"64GB",p:190000},{s:"128GB",p:240000},{s:"256GB",p:280000}], sealed:false },
+      { name: "iPhone 12",         img: "assets/iphones/iphone-12.webp",          storages: [{s:"64GB",p:220000},{s:"128GB",p:260000},{s:"256GB",p:320000}], sealed:false },
+      { name: "iPhone 12 Pro",     img: "assets/iphones/variants/12-pro.webp",    storages: [{s:"128GB",p:310000},{s:"256GB",p:350000},{s:"512GB",p:400000}], sealed:false },
+      { name: "iPhone 12 Pro Max", img: "assets/iphones/variants/12-promax.webp", storages: [{s:"128GB",p:370000},{s:"256GB",p:420000},{s:"512GB",p:460000}], sealed:false },
     ],
   },
   {
     id: 13, line: "13", year: 2021, img: "assets/iphones/iphone-13.webp",
     models: [
-      { name: "iPhone 13 Mini",    img: "assets/iphones/variants/13-mini.webp",   storages: [{s:"128GB",p:350000},{s:"256GB",p:400000},{s:"512GB",p:440000}], sealed:false },
-      { name: "iPhone 13",         img: "assets/iphones/iphone-13.webp",          storages: [{s:"128GB",p:380000},{s:"256GB",p:420000},{s:"512GB",p:460000}], sealed:false },
-      { name: "iPhone 13 Pro",     img: "assets/iphones/variants/13-pro.webp",    storages: [{s:"128GB",p:490000},{s:"256GB",p:530000},{s:"512GB",p:570000}], sealed:false },
-      { name: "iPhone 13 Pro Max", img: "assets/iphones/variants/13-promax.webp", storages: [{s:"128GB",p:560000},{s:"256GB",p:590000},{s:"512GB",p:630000}], sealed:false },
+      { name: "iPhone 13 Mini",    img: "assets/iphones/variants/13-mini.webp",   storages: [{s:"128GB",p:320000},{s:"256GB",p:370000},{s:"512GB",p:410000}], sealed:false },
+      { name: "iPhone 13",         img: "assets/iphones/iphone-13.webp",          storages: [{s:"128GB",p:350000},{s:"256GB",p:390000},{s:"512GB",p:430000}], sealed:false },
+      { name: "iPhone 13 Pro",     img: "assets/iphones/variants/13-pro.webp",    storages: [{s:"128GB",p:460000},{s:"256GB",p:500000},{s:"512GB",p:540000}], sealed:false },
+      { name: "iPhone 13 Pro Max", img: "assets/iphones/variants/13-promax.webp", storages: [{s:"128GB",p:530000},{s:"256GB",p:560000},{s:"512GB",p:600000}], sealed:false },
     ],
   },
   {
     id: 14, line: "14", year: 2022, img: "assets/iphones/iphone-14.webp",
     models: [
-      { name: "iPhone 14",         img: "assets/iphones/iphone-14.webp",          storages: [{s:"128GB",p:420000},{s:"256GB",p:470000},{s:"512GB",p:510000}], sealed:false },
-      { name: "iPhone 14 Plus",    img: "assets/iphones/variants/14-plus.webp",   storages: [{s:"128GB",p:480000},{s:"256GB",p:510000},{s:"512GB",p:560000}], sealed:false },
-      { name: "iPhone 14 Pro",     img: "assets/iphones/variants/14-pro.webp",    storages: [{s:"128GB",p:590000},{s:"256GB",p:640000},{s:"512GB",p:690000}], sealed:false },
-      { name: "iPhone 14 Pro Max", img: "assets/iphones/variants/14-promax.webp", storages: [{s:"128GB",p:660000},{s:"256GB",p:720000},{s:"512GB",p:770000}], sealed:false },
+      { name: "iPhone 14",         img: "assets/iphones/iphone-14.webp",          storages: [{s:"128GB",p:390000},{s:"256GB",p:440000},{s:"512GB",p:480000}], sealed:false },
+      { name: "iPhone 14 Plus",    img: "assets/iphones/variants/14-plus.webp",   storages: [{s:"128GB",p:450000},{s:"256GB",p:480000},{s:"512GB",p:530000}], sealed:false },
+      { name: "iPhone 14 Pro",     img: "assets/iphones/variants/14-pro.webp",    storages: [{s:"128GB",p:560000},{s:"256GB",p:610000},{s:"512GB",p:660000}], sealed:false },
+      { name: "iPhone 14 Pro Max", img: "assets/iphones/variants/14-promax.webp", storages: [{s:"128GB",p:630000},{s:"256GB",p:690000},{s:"512GB",p:740000}], sealed:false },
     ],
   },
   {
     id: 15, line: "15", year: 2023, img: "assets/iphones/iphone-15.webp",
     models: [
-      { name: "iPhone 15",         img: "assets/iphones/iphone-15.webp",          storages: [{s:"128GB",p:540000},{s:"256GB",p:580000}], sealed:false },
-      { name: "iPhone 15 Plus",    img: "assets/iphones/variants/15-plus.webp",   storages: [{s:"128GB",p:650000},{s:"256GB",p:700000}], sealed:false },
-      { name: "iPhone 15 Pro",     img: "assets/iphones/variants/15-pro.webp",    storages: [{s:"128GB",p:720000},{s:"256GB",p:740000},{s:"512GB",p:800000}], sealed:false },
-      { name: "iPhone 15 Pro Max", img: "assets/iphones/variants/15-promax.webp", storages: [{s:"256GB",p:820000},{s:"512GB",p:860000}], sealed:false },
+      { name: "iPhone 15",         img: "assets/iphones/iphone-15.webp",          storages: [{s:"128GB",p:510000},{s:"256GB",p:550000}], sealed:false },
+      { name: "iPhone 15 Plus",    img: "assets/iphones/variants/15-plus.webp",   storages: [{s:"128GB",p:620000},{s:"256GB",p:670000}], sealed:false },
+      { name: "iPhone 15 Pro",     img: "assets/iphones/variants/15-pro.webp",    storages: [{s:"128GB",p:690000},{s:"256GB",p:710000},{s:"512GB",p:770000}], sealed:false },
+      { name: "iPhone 15 Pro Max", img: "assets/iphones/variants/15-promax.webp", storages: [{s:"256GB",p:790000},{s:"512GB",p:830000}], sealed:false },
     ],
   },
   {
     id: 16, line: "16", year: 2024, img: "assets/iphones/iphone-16.webp",
     models: [
-      { name: "iPhone 16",         img: "assets/iphones/iphone-16.webp",          storages: [{s:"128GB",p:660000},{s:"256GB",p:700000}], sealed:false },
-      { name: "iPhone 16 Plus",    img: "assets/iphones/variants/16-plus.webp",   storages: [{s:"128GB",p:750000},{s:"256GB",p:800000}], sealed:false },
-      { name: "iPhone 16 Pro",     img: "assets/iphones/variants/16-pro.webp",    storages: [{s:"256GB",p:920000},{s:"512GB",p:970000}], sealed:false },
-      { name: "iPhone 16 Pro Max", img: "assets/iphones/variants/16-promax.webp", storages: [{s:"256GB",p:980000},{s:"512GB",p:1050000}], sealed:false },
+      { name: "iPhone 16",         img: "assets/iphones/iphone-16.webp",          storages: [{s:"128GB",p:630000},{s:"256GB",p:670000}], sealed:false },
+      { name: "iPhone 16 Plus",    img: "assets/iphones/variants/16-plus.webp",   storages: [{s:"128GB",p:720000},{s:"256GB",p:770000}], sealed:false },
+      { name: "iPhone 16 Pro",     img: "assets/iphones/variants/16-pro.webp",    storages: [{s:"128GB",p:830000},{s:"256GB",p:890000},{s:"512GB",p:940000}], sealed:false },
+      { name: "iPhone 16 Pro Max", img: "assets/iphones/variants/16-promax.webp", storages: [{s:"256GB",p:950000},{s:"512GB",p:1020000}], sealed:false },
     ],
   },
   {
     id: 17, line: "17", year: 2025, img: "assets/iphones/iphone-17.webp",
     models: [
-      { name: "iPhone 17",         img: "assets/iphones/iphone-17.webp",          storages: [{s:"256GB",p:880000},{s:"512GB",p:920000}], sealed:true },
-      { name: "iPhone 17 Pro",     img: "assets/iphones/variants/17-pro.webp",    storages: [{s:"256GB",p:1250000},{s:"512GB",p:1500000}], sealed:true },
-      { name: "iPhone 17 Pro Max", img: "assets/iphones/iphone-17-pro-max.webp",  storages: [{s:"256GB",p:1350000},{s:"512GB",p:1600000}], sealed:true },
+      { name: "iPhone 17",         img: "assets/iphones/iphone-17.webp",          storages: [{s:"256GB",p:850000},{s:"512GB",p:890000}], sealed:true },
+      { name: "iPhone 17 Pro",     img: "assets/iphones/variants/17-pro.webp",    storages: [{s:"256GB",p:1220000},{s:"512GB",p:1470000}], sealed:true },
+      { name: "iPhone 17 Pro Max", img: "assets/iphones/iphone-17-pro-max.webp",  storages: [{s:"256GB",p:1320000},{s:"512GB",p:1570000}], sealed:true },
     ],
   },
 ];

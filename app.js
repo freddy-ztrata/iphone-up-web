@@ -39,10 +39,11 @@ const el = (tag, attrs={}, children=[]) => {
 
 // ---------- Rendering: Catalog ----------
 function visiblePhones() {
+  const base = CATALOG.filter(p => !p.hidden);
   let list;
-  if (state.filter === "new")          list = CATALOG.filter(p => p.id >= 15);
-  else if (state.filter === "classic") list = CATALOG.filter(p => p.id < 15);
-  else                                 list = CATALOG;
+  if (state.filter === "new")          list = base.filter(p => p.id >= 15);
+  else if (state.filter === "classic") list = base.filter(p => p.id < 15);
+  else                                 list = base;
   return [...list].sort((a, b) => b.id - a.id);
 }
 
