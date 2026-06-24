@@ -18,11 +18,13 @@ app.disable("x-powered-by");
 
 // Healthcheck
 app.get("/api/health", (_req, res) => {
+  const chilexpressConfigured = Boolean(process.env.CHILEXPRESS_API_KEY_RATING);
   res.json({
     ok: true,
     env: {
       mpConfigured: Boolean(process.env.MP_ACCESS_TOKEN && process.env.MP_ACCESS_TOKEN.startsWith("APP_USR-")),
-      chilexpressConfigured: Boolean(process.env.CHILEXPRESS_API_KEY_RATING),
+      chilexpressConfigured,
+      shippingMode: chilexpressConfigured ? "chilexpress" : "fallback-rates",
       publicUrl: PUBLIC_URL,
     },
   });
@@ -64,5 +66,5 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
 app.listen(PORT, () => {
   console.log(`iPhone UP server listening on ${PUBLIC_URL} (port ${PORT})`);
   if (!process.env.MP_ACCESS_TOKEN) console.warn("⚠️  MP_ACCESS_TOKEN no configurado — los pagos fallarán");
-  if (!process.env.CHILEXPRESS_API_KEY_RATING) console.warn("⚠️  CHILEXPRESS_API_KEY_RATING no configurado — el cotizador fallará");
+  if (!process.env.CHILEXPRESS_API_KEY_RATING) console.log("ℹ️  Sin Chilexpress API — usando tarifas fallback por región");
 });

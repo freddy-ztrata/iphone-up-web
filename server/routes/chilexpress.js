@@ -1,5 +1,6 @@
 const express = require("express");
 const cx = require("../lib/chilexpress");
+const fallback = require("../lib/shipping-fallback");
 
 const router = express.Router();
 
@@ -9,6 +10,9 @@ const DEFAULT_PKG = { weight: 0.7, length: 18, width: 12, height: 6 };
 
 // Listado de regiones de Chile (Chilexpress).
 router.get("/regions", async (_req, res) => {
+  if (fallback.isEnabled()) {
+    return res.json({ regions: fallback.listRegions(), fallback: true });
+  }
   try {
     const regions = await cx.listRegions();
     res.json({ regions });
@@ -22,6 +26,10 @@ router.get("/regions", async (_req, res) => {
 router.get("/coverage", async (req, res) => {
   const regionCode = String(req.query.regionCode || "").trim();
   if (!regionCode) return res.status(400).json({ error: "regionCode requerido" });
+
+  if (fallback.isEnabled()) {
+    return res.json({ areas: fallback.listCommunes(regionCode), fallback: true });
+  }
   try {
     const areas = await cx.listCoverageAreas(regionCode);
     res.json({ areas });
@@ -39,8 +47,12 @@ router.post("/quote", async (req, res) => {
   if (!destinationCountyCode) return res.status(400).json({ error: "destinationCountyCode requerido" });
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "items vacío" });
 
+  if (fallback.isEnabled()) {
+    const region = fallback.regionFromCountyCode(destinationCountyCode);
+    return res.json({ services: fallback.quoteForRegion(region), fallback: true });
+  }
+
   const qty = items.length;
-  // Para múltiples iPhones, agrandamos el bulto sumando alturas.
   const pkg = {
     weight: +(DEFAULT_PKG.weight * qty).toFixed(2),
     length: DEFAULT_PKG.length,
@@ -61,7 +73,6 @@ router.post("/quote", async (req, res) => {
       declaredWorth: worth,
     });
 
-    // Normalizamos al formato que consume el frontend.
     const services = options.map(o => ({
       code: o.serviceTypeCode || o.ServiceTypeCode,
       name: o.serviceDescription || o.ServiceDescription || "Chilexpress",
