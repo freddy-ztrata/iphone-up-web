@@ -17,10 +17,15 @@ app.use(express.json({ limit: "1mb" }));
 app.disable("x-powered-by");
 
 // Healthcheck
+const fs = require("fs");
+let BUILD_SHA = "unknown";
+try { BUILD_SHA = fs.readFileSync(path.join(__dirname, "..", ".git-sha"), "utf-8").trim() || "unknown"; } catch {}
+
 app.get("/api/health", (_req, res) => {
   const chilexpressConfigured = Boolean(process.env.CHILEXPRESS_API_KEY_RATING);
   res.json({
     ok: true,
+    build: BUILD_SHA,
     env: {
       mpConfigured: Boolean(process.env.MP_ACCESS_TOKEN && process.env.MP_ACCESS_TOKEN.startsWith("APP_USR-")),
       chilexpressConfigured,
