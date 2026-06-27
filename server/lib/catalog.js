@@ -106,6 +106,62 @@ function buildCatalog(opts = {}) {
   });
 }
 
+// Slug url-safe del modelo dentro de su línea:
+//   "iPhone 11 Pro Max" (línea "11") -> "pro-max"; "iPhone 11" -> "base".
+function slugify(name, line) {
+  let s = String(name || "").toLowerCase().trim();
+  const prefix = `iphone ${String(line).toLowerCase()}`;
+  if (s.startsWith(prefix)) s = s.slice(prefix.length);
+  s = s.trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return s || "base";
+}
+
+/**
+ * Catálogo PÚBLICO aplanado: cada MODELO es un producto independiente
+ * (iPhone 11, iPhone 11 Pro, iPhone 11 Pro Max → 3 entradas separadas).
+ * Las variaciones de cada entrada son capacidad × color (`storages`).
+ *
+ * IMPORTANTE: conserva `id` = id de la LÍNEA (lo usan el backend para
+ * findVariantId/stock, los cupones por scope de línea y specs.js), y agrega
+ * `slug` único por modelo dentro de la línea para la URL `?id=<línea>&model=<slug>`.
+ * buildCatalog() sigue devolviendo el shape anidado products→models para el admin.
+ */
+function buildPublicCatalog() {
+  const nested = buildCatalog({ includeHidden: true });
+  const flat = [];
+  for (const p of nested) {
+    const models = Array.isArray(p.models) ? p.models : [];
+    const slugSeen = new Set();
+    for (const m of models) {
+      const storages = Array.isArray(m.storages) ? m.storages : [];
+      if (!storages.length) continue; // sin variantes vendibles → no se publica
+      let slug = slugify(m.name, p.line);
+      if (slugSeen.has(slug)) {
+        let i = 2;
+        while (slugSeen.has(`${slug}-${i}`)) i++;
+        slug = `${slug}-${i}`;
+      }
+      slugSeen.add(slug);
+      const entry = {
+        id: p.id,
+        line: p.line,
+        year: p.year,
+        lineImg: p.img,
+        name: m.name,
+        slug,
+        img: m.img || p.img,
+        sealed: !!m.sealed,
+        storages,
+      };
+      if (p.hidden) entry.hidden = true;
+      if (m.tagline) entry.tagline = m.tagline;
+      if (Array.isArray(m.gallery) && m.gallery.length) entry.gallery = m.gallery;
+      flat.push(entry);
+    }
+  }
+  return flat;
+}
+
 /**
  * Serializa el catálogo como JavaScript inline para servir como /data.js.
  * Mantiene exactamente la API que el frontend espera: define window.CATALOG.
@@ -115,8 +171,7 @@ function buildCatalog(opts = {}) {
 function buildDataJs() {
   // Excluimos del catálogo público los productos sin variantes vendibles (sin
   // modelos o con modelos sin storages) para no romper el render del frontend.
-  const catalog = buildCatalog({ includeHidden: true })
-    .filter(p => Array.isArray(p.models) && p.models.some(m => Array.isArray(m.storages) && m.storages.length));
+  const catalog = buildPublicCatalog();
   // TESTIMONIALS/STATS/FAQS/TRADEIN_PRICES siguen "duras" por ahora — están en
   // settings y pueden editarse desde admin más adelante. Para el MVP las
   // dejamos hardcoded acá para no romper el frontend.
@@ -174,4 +229,4 @@ function findVariantId({ phoneId, model, storage }) {
   return row ? row.id : null;
 }
 
-module.exports = { buildCatalog, buildDataJs, findVariantId };
+module.exports = { buildCatalog, buildPublicCatalog, buildDataJs, findVariantId };

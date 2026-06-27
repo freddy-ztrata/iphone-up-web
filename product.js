@@ -1,5 +1,6 @@
 // iPhone UP — página de detalle de producto
-// Lee ?id=<line>&m=<modelIdx>&s=<storageIdx> y renderiza la línea completa.
+// Lee ?id=<línea>&model=<slug> y renderiza UN modelo (variaciones = capacidad × color).
+// Compatibilidad: links viejos ?id=<línea>&m=<idx> siguen resolviendo al modelo correcto.
 
 const CATALOG = window.CATALOG;
 const fmtCLP = window.fmtCLP;
@@ -26,22 +27,30 @@ function parseQuery() {
   const p = new URLSearchParams(window.location.search);
   return {
     id: parseInt(p.get("id"), 10),
+    model: p.get("model") || "",
     m: Math.max(0, parseInt(p.get("m"), 10) || 0),
+    hasM: p.get("m") !== null,
     cap: p.get("cap") || "",
     col: p.get("col") || "",
   };
 }
 
 const state = {
-  phone: null,
-  modelIdx: 0,
+  phone: null,   // la entrada del catálogo = UN modelo
   capSel: "",
   colorSel: "",
 };
 
 function init() {
   const q = parseQuery();
-  const phone = CATALOG.find(p => p.id === q.id);
+  // CATALOG es plano: 1 entrada por modelo. Varias comparten id (la línea).
+  const matches = CATALOG.filter(p => p.id === q.id);
+  let phone = null;
+  if (matches.length) {
+    if (q.model) phone = matches.find(e => e.slug === q.model) || null;
+    if (!phone && q.hasM) phone = matches[Math.min(q.m, matches.length - 1)]; // compat ?m=
+    if (!phone) phone = matches[0];
+  }
   if (!phone) {
     $("#product-root").style.display = "none";
     $("#product-error").style.display = "block";
@@ -50,7 +59,6 @@ function init() {
     return;
   }
   state.phone = phone;
-  state.modelIdx = Math.min(q.m, phone.models.length - 1);
   state.capSel = q.cap;
   state.colorSel = q.col;
 
@@ -61,7 +69,7 @@ function init() {
 }
 
 function currentModel() {
-  return state.phone.models[state.modelIdx];
+  return state.phone;
 }
 // Variantes = capacidad × color. Helpers para el selector 2D.
 function modelCaps(model) {
@@ -99,7 +107,7 @@ function renderAll() {
   $("#product-title").textContent = model.name;
 
   // Image — main + gallery thumbnails
-  const mainImg = model.img || phone.img;
+  const mainImg = model.img || phone.lineImg;
   $("#product-img").src = mainImg;
   $("#product-img").alt = model.name;
   renderThumbs(model, mainImg);
@@ -111,20 +119,13 @@ function renderAll() {
   $("#product-condition-pill").textContent = model.sealed ? "Sellado en caja" : "Seminuevo A+";
   $("#product-year-pill").textContent = String(phone.year);
 
-  // Variants
+  // (sin selector de modelo — cada producto es un único modelo; ocultamos la sección)
   const vWrap = $("#product-variants");
-  vWrap.innerHTML = "";
-  phone.models.forEach((m, i) => {
-    const label = m.name.replace(`iPhone ${phone.line}`, "").trim() || "Base";
-    const btn = el("button", {
-      class: "variant-pill" + (i === state.modelIdx ? " active" : ""),
-      onclick: () => { state.modelIdx = i; state.capSel = ""; state.colorSel = ""; pushUrl(); renderAll(); },
-    }, label);
-    vWrap.appendChild(btn);
-  });
-  // Hide variants section if only one model
-  vWrap.style.display = phone.models.length > 1 ? "flex" : "none";
-  vWrap.previousElementSibling.style.display = phone.models.length > 1 ? "block" : "none";
+  if (vWrap) {
+    vWrap.innerHTML = "";
+    vWrap.style.display = "none";
+    if (vWrap.previousElementSibling) vWrap.previousElementSibling.style.display = "none";
+  }
 
   // Capacidades (distinct entre variantes activas)
   const sWrap = $("#product-storages");
@@ -175,7 +176,7 @@ function renderAll() {
   addBtn.onclick = () => {
     window.cartStore.add({
       model: model.name, storage: variant.s, color: variant.color || "", price: variant.p,
-      sealed: model.sealed, phoneId: phone.id, img: model.img || phone.img,
+      sealed: model.sealed, phoneId: phone.id, img: model.img || phone.lineImg,
     });
     updateCartBadge();
     openCart();
@@ -224,8 +225,8 @@ function updateMeta(phone, model, storage) {
   const vLabel = `${storage.s}${storage.color ? " " + storage.color : ""}`;
   const title = `${model.name} ${vLabel} ${condShort} | iPhone UP`;
   const desc = `${model.name} ${vLabel} ${condLong}, 100% original con garantía de 6 meses. Desde ${fmtCLP(storage.p)}. Tienda física en Providencia, Santiago.`;
-  const canonical = `https://iphoneup.cl/product.html?id=${phone.id}`;
-  const img = "https://iphoneup.cl/" + (model.img || phone.img);
+  const canonical = `https://iphoneup.cl/product.html?id=${phone.id}&model=${phone.slug}`;
+  const img = "https://iphoneup.cl/" + (model.img || phone.lineImg);
 
   document.title = title;
   setMetaAttr("meta-desc", "content", desc);
@@ -243,7 +244,7 @@ function updateProductSchema(phone, model, storage) {
   const condition = model.sealed
     ? "https://schema.org/NewCondition"
     : "https://schema.org/RefurbishedCondition";
-  const img = "https://iphoneup.cl/" + (model.img || phone.img);
+  const img = "https://iphoneup.cl/" + (model.img || phone.lineImg);
   const vLabel = `${storage.s}${storage.color ? " " + storage.color : ""}`;
   const product = {
     "@context": "https://schema.org",
@@ -260,7 +261,7 @@ function updateProductSchema(phone, model, storage) {
       priceCurrency: "CLP",
       itemCondition: condition,
       availability: "https://schema.org/InStock",
-      url: `https://iphoneup.cl/product.html?id=${phone.id}&m=${state.modelIdx}`,
+      url: `https://iphoneup.cl/product.html?id=${phone.id}&model=${phone.slug}`,
       seller: { "@type": "Organization", name: "iPhone UP" },
     },
   };
@@ -312,16 +313,18 @@ function renderRelated() {
   const grid = $("#related-grid");
   grid.innerHTML = "";
   const id = state.phone.id;
-  // pick the closest 3 lines (above and below) — excludes hidden test products
-  const others = CATALOG.filter(p => p.id !== id && !p.hidden)
+  // Líneas distintas más cercanas (excluye la actual y ocultos/test). CATALOG es por modelo,
+  // así que deduplicamos por id de línea para no repetir variantes de la misma línea.
+  const seen = new Set();
+  const others = CATALOG
+    .filter(p => p.id !== id && !p.hidden && !seen.has(p.id) && seen.add(p.id))
     .sort((a, b) => Math.abs(a.id - id) - Math.abs(b.id - id))
     .slice(0, 3);
   others.forEach(p => {
-    const m = p.models[0];
-    const minPrice = Math.min(...p.models.flatMap(mm => mm.storages.map(s => s.p)));
-    const card = el("a", { class: "related-card", href: `product.html?id=${p.id}` }, [
+    const minPrice = Math.min(...(p.storages || []).map(s => s.p));
+    const card = el("a", { class: "related-card", href: `product.html?id=${p.id}&model=${p.slug}` }, [
       el("div", { class: "related-img" }, [
-        el("img", { src: p.img, alt: m.name, loading: "lazy" }),
+        el("img", { src: p.img || p.lineImg, alt: p.name, loading: "lazy" }),
       ]),
       el("div", { class: "related-line" }, `iPhone ${p.line}`),
       el("div", { class: "related-price" }, `Desde ${fmtCLP(minPrice)}`),
@@ -333,7 +336,8 @@ function renderRelated() {
 function pushUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set("id", state.phone.id);
-  url.searchParams.set("m", state.modelIdx);
+  url.searchParams.set("model", state.phone.slug);
+  url.searchParams.delete("m");
   if (state.capSel) url.searchParams.set("cap", state.capSel); else url.searchParams.delete("cap");
   if (state.colorSel) url.searchParams.set("col", state.colorSel); else url.searchParams.delete("col");
   url.searchParams.delete("s");
