@@ -317,7 +317,7 @@ function renderRelated() {
   // así que deduplicamos por id de línea para no repetir variantes de la misma línea.
   const seen = new Set();
   const others = CATALOG
-    .filter(p => p.id !== id && !p.hidden && !seen.has(p.id) && seen.add(p.id))
+    .filter(p => p.id !== id && !p.hidden && Array.isArray(p.storages) && p.storages.length && !seen.has(p.id) && seen.add(p.id))
     .sort((a, b) => Math.abs(a.id - id) - Math.abs(b.id - id))
     .slice(0, 3);
   others.forEach(p => {

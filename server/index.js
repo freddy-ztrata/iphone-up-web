@@ -113,10 +113,29 @@ app.get("/api/health", (_req, res) => {
 // pero el ETag hace que el navegador haga 304 si no cambió.
 const USE_DB_CATALOG = process.env.USE_DB_CATALOG !== "false";
 
+// Fallback shape-válido (catálogo vacío) cuando el catálogo de la DB no está
+// disponible. OJO: NO servimos el data.js físico — ese archivo es la fuente del
+// SEED y mantiene el shape ANIDADO (products→models[]), incompatible con el
+// frontend público que ahora espera 1 entrada por modelo (plano). Servir vacío
+// degrada con gracia (no rompe el JS) y conserva cartStore/fmtCLP para que el
+// checkout siga operando.
+const EMPTY_CATALOG_JS = [
+  "window.CATALOG=[];",
+  "window.TESTIMONIALS=[];window.STATS=[];window.FAQS=[];window.TRADEIN_PRICES={};",
+  'window.fmtCLP=function(n){return "$"+Number(n).toLocaleString("es-CL");};',
+  'window.cartStore={key:"iphoneup_cart_v1",read(){try{return JSON.parse(sessionStorage.getItem(this.key)||"[]")}catch(e){return[]}},write(i){sessionStorage.setItem(this.key,JSON.stringify(i))},add(i){var c=this.read();c.push(i);this.write(c);return c},remove(x){var c=this.read();c.splice(x,1);this.write(c);return c},count(){return this.read().length}};',
+].join("\n");
+
+function sendEmptyCatalog(res) {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.send(EMPTY_CATALOG_JS);
+}
+
 app.get("/data.js", (req, res) => {
   if (!USE_DB_CATALOG) {
-    // Fallback: servir el archivo físico del repo
-    return res.sendFile(path.join(__dirname, "..", "data.js"));
+    console.warn("[/data.js] USE_DB_CATALOG=false — sirviendo catálogo vacío (el data.js físico es solo seed, shape incompatible)");
+    return sendEmptyCatalog(res);
   }
   try {
     const { body, etag } = buildDataJs();
@@ -127,8 +146,7 @@ app.get("/data.js", (req, res) => {
     res.send(body);
   } catch (err) {
     console.error("[/data.js] error:", err.message);
-    // Si la DB falla, caemos al archivo físico para no romper el frontend.
-    res.sendFile(path.join(__dirname, "..", "data.js"));
+    sendEmptyCatalog(res);
   }
 });
 
