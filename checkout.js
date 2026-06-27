@@ -108,11 +108,14 @@ function updateSubmitEnabled() {
     state.selectedShip &&
     !state.submitting;
   if (state.deliveryMethod === "shipping") {
+    // Datos obligatorios para envío por pagar (requeridos por la operación).
     ok = ok &&
+      form.rut.value.trim() &&
+      form.instagram.value.trim() &&
+      form.color.value.trim() &&
       state.selectedRegion &&
       state.selectedCounty &&
-      form.street.value.trim() &&
-      form.number.value.trim();
+      form.branch.value.trim();
   }
   $("#co-submit").disabled = !ok;
 }
@@ -274,6 +277,8 @@ async function onSubmit(e) {
     rut: form.rut.value.trim(),
     email: form.email.value.trim(),
     phone: form.phone.value.trim(),
+    instagram: form.instagram.value.trim(),
+    color: form.color.value.trim(),
   };
 
   const isPickup = state.deliveryMethod === "pickup";
@@ -293,8 +298,7 @@ async function onSubmit(e) {
       regionCode: state.selectedRegion || "",
       county: state.selectedCountyLabel || "",
       countyCode: state.selectedCounty || "",
-      street: form.street.value.trim(),
-      number: form.number.value.trim(),
+      branch: form.branch.value.trim(),
       extra: form.extra.value.trim(),
     },
   };
