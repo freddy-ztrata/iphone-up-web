@@ -19,14 +19,17 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Sessions table (better-sqlite3-session-store maneja esta tabla automáticamente
--- pero la declaramos para que no se pierda el schema al hacer un dump).
+-- Sessions table. IMPORTANTE: better-sqlite3-session-store usa la columna
+-- `expire` (NO `expired`). Si se declara con otro nombre, store.get/set fallan
+-- con "no such column: expire" en CADA request que lleva cookie de sesión
+-- (síntoma: Internal Server Error solo para usuarios logueados). La 002 repara
+-- las DBs que ya se crearon con el nombre equivocado.
 CREATE TABLE IF NOT EXISTS sessions (
   sid         TEXT PRIMARY KEY,
-  sess        TEXT NOT NULL,
-  expired     INTEGER NOT NULL
+  expire      INTEGER NOT NULL,
+  sess        TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sessions_expired ON sessions(expired);
+CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);
 
 CREATE TABLE IF NOT EXISTS login_attempts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
