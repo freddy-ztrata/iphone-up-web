@@ -122,6 +122,16 @@ window.cartStore = {
   remove(idx) { const c = this.read(); c.splice(idx, 1); this.write(c); return c; },
   count() { return this.read().length; },
 };
+
+// Tracking de visitas para la analítica del admin (solo páginas públicas que cargan data.js).
+(function(){
+  try {
+    var k = "iphoneup_sid", sid = localStorage.getItem(k);
+    if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem(k, sid); }
+    fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+      body: JSON.stringify({ sessionId: sid, path: location.pathname, referrer: document.referrer || "" }) }).catch(function(){});
+  } catch (e) {}
+})();
 `;
 
   const etag = `W/"${crypto.createHash("sha1").update(js).digest("hex").slice(0, 16)}"`;

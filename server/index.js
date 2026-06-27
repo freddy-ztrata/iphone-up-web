@@ -8,6 +8,7 @@ const express = require("express");
 const helmet = require("helmet");
 const session = require("express-session");
 const cookieParser = require("cookie-parser");
+const rateLimit = require("express-rate-limit");
 const SqliteStore = require("better-sqlite3-session-store")(session);
 
 // Inicialización en orden: DB primero (corre migraciones), después seed.
@@ -126,6 +127,25 @@ app.use("/api/mercadopago", mercadopagoRouter);
 app.use("/api/chilexpress", chilexpressRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/admin", adminRouter);
+
+// ---------- Tracking de visitas (analítica del admin) ----------
+const trackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: false, legacyHeaders: false });
+const INSERT_VISIT = db.prepare(`INSERT INTO visits (session_id, path, referrer, user_agent, ip) VALUES (?, ?, ?, ?, ?)`);
+app.post("/api/track", trackLimiter, (req, res) => {
+  try {
+    const { sessionId, path: p, referrer } = req.body || {};
+    if (sessionId) {
+      INSERT_VISIT.run(
+        String(sessionId).slice(0, 64),
+        String(p || "").slice(0, 300),
+        String(referrer || "").slice(0, 300),
+        (req.get("user-agent") || "").slice(0, 300),
+        req.ip || null
+      );
+    }
+  } catch (e) { /* nunca romper la respuesta por tracking */ }
+  res.status(204).end();
+});
 
 // ---------- Admin UI ----------
 const ROOT = path.resolve(__dirname, "..");

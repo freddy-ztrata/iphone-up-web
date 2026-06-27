@@ -174,6 +174,58 @@
       </section>
 
       <!-- CATÁLOGO -->
+      <!-- ANALÍTICA -->
+      <section x-show="view === 'analytics'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Analítica</h1>
+            <p class="ac-page-sub">Visitas en tiempo real, sesiones y ventas (últimos 30 días)</p>
+          </div>
+        </header>
+
+        <div class="ac-an-realtime">
+          <div class="ac-an-rt-live"><span class="ac-an-pulse"></span> EN VIVO</div>
+          <div class="ac-an-rt-num" x-text="analytics.realtime ? analytics.realtime.activeVisitors : '—'"></div>
+          <div class="ac-an-rt-cap">visitantes ahora · <span x-text="analytics.realtime ? analytics.realtime.pageviews30m : 0"></span> páginas vistas (últimos 30 min)</div>
+        </div>
+
+        <div class="ac-an-kpis">
+          <div class="ac-an-kpi"><span class="ac-an-kpi-label">Sesiones</span><span class="ac-an-kpi-val" x-text="analytics.overview ? analytics.overview.totals.sessions : '—'"></span></div>
+          <div class="ac-an-kpi"><span class="ac-an-kpi-label">Páginas vistas</span><span class="ac-an-kpi-val" x-text="analytics.overview ? analytics.overview.totals.pageviews : '—'"></span></div>
+          <div class="ac-an-kpi"><span class="ac-an-kpi-label">Ventas</span><span class="ac-an-kpi-val" x-text="analytics.overview ? analytics.overview.salesTotals.orders : '—'"></span></div>
+          <div class="ac-an-kpi"><span class="ac-an-kpi-label">Ingresos</span><span class="ac-an-kpi-val" x-text="fmtCLP(analytics.overview ? analytics.overview.salesTotals.revenue : 0)"></span></div>
+        </div>
+
+        <div class="ac-an-card">
+          <h3 class="ac-an-card-title">Sesiones por día</h3>
+          <div class="ac-an-bars">
+            <template x-for="(d, i) in (analytics.overview ? analytics.overview.perDay : [])" :key="i">
+              <div class="ac-an-bar-wrap" :title="d.day + ': ' + d.sessions + ' sesiones · ' + d.pageviews + ' páginas'">
+                <div class="ac-an-bar" :style="'height:' + analyticsBarH(d.sessions) + '%'"></div>
+              </div>
+            </template>
+          </div>
+          <p class="ac-empty" x-show="analytics.overview && !analytics.overview.perDay.length">Aún no hay visitas registradas. Apenas entren clientes a la web, aparecerán aquí.</p>
+        </div>
+
+        <div class="ac-an-grid">
+          <div class="ac-an-card" style="margin:0">
+            <h3 class="ac-an-card-title">Actividad en vivo</h3>
+            <template x-for="(v, i) in (analytics.realtime ? analytics.realtime.recent : [])" :key="i">
+              <div class="ac-an-row"><span class="ac-an-path" x-text="v.path || '/'"></span><span class="ac-an-meta" x-text="timeAgo(v.created_at)"></span></div>
+            </template>
+            <p class="ac-empty" x-show="analytics.realtime && !analytics.realtime.recent.length">Sin actividad reciente.</p>
+          </div>
+          <div class="ac-an-card" style="margin:0">
+            <h3 class="ac-an-card-title">Páginas más vistas</h3>
+            <template x-for="(p, i) in (analytics.overview ? analytics.overview.topPages : [])" :key="i">
+              <div class="ac-an-row"><span class="ac-an-path" x-text="p.path || '/'"></span><span class="ac-an-meta"><span x-text="p.pageviews"></span> vistas</span></div>
+            </template>
+            <p class="ac-empty" x-show="analytics.overview && !analytics.overview.topPages.length">Sin datos.</p>
+          </div>
+        </div>
+      </section>
+
       <section x-show="view === 'catalog'">
         <header class="ac-page-head">
           <div>

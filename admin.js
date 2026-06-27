@@ -19,6 +19,7 @@ function adminApp() {
     users: [],
     audit: [],
     dashboard: null,
+    analytics: { realtime: null, overview: null, days: 30 },
     systemInfo: null,
     loadingProducts: false,
     orderFilter: "",
@@ -35,6 +36,7 @@ function adminApp() {
 
     nav: [
       { id: "dashboard", label: "Dashboard", icon: "◐" },
+      { id: "analytics", label: "Analítica", icon: "📈" },
       { id: "catalog",   label: "Catálogo",  icon: "▦" },
       { id: "stock",     label: "Stock",     icon: "◫" },
       { id: "coupons",   label: "Cupones",   icon: "🎟" },
@@ -137,12 +139,14 @@ function adminApp() {
 
     // ----- Navigation -----
     goto(viewId) {
+      if (viewId !== "analytics") this.stopRealtime();
       this.view = viewId;
       if (viewId === "catalog") this.loadProducts();
       if (viewId === "stock") this.loadProducts();
       if (viewId === "coupons") this.loadCoupons();
       if (viewId === "orders") this.loadOrders();
       if (viewId === "dashboard") this.loadDashboard();
+      if (viewId === "analytics") this.loadAnalytics();
       if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); }
     },
 
@@ -212,6 +216,29 @@ function adminApp() {
         const r = await fetch("/api/health");
         this.systemInfo = await r.json();
       } catch {}
+    },
+
+    // ----- Analítica -----
+    async loadAnalytics() {
+      this.loadRealtime();
+      try { this.analytics.overview = await this.api("GET", "/analytics/overview?days=" + this.analytics.days); } catch (e) {}
+      this.startRealtime();
+    },
+    async loadRealtime() {
+      try { this.analytics.realtime = await this.api("GET", "/analytics/realtime"); } catch (e) {}
+    },
+    startRealtime() {
+      this.stopRealtime();
+      this._rtTimer = setInterval(() => {
+        if (this.view === "analytics") this.loadRealtime();
+        else this.stopRealtime();
+      }, 12000);
+    },
+    stopRealtime() { if (this._rtTimer) { clearInterval(this._rtTimer); this._rtTimer = null; } },
+    analyticsBarH(v) {
+      const days = (this.analytics.overview && this.analytics.overview.perDay) || [];
+      const max = Math.max(1, ...days.map(d => d.sessions));
+      return Math.max(4, Math.round((Number(v) / max) * 100));
     },
 
     // ----- Mutations -----
