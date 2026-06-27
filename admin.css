@@ -357,7 +357,7 @@
 .ac-table.loading { opacity: 0.5; pointer-events: none; }
 .ac-table-head, .ac-tr {
   display: grid;
-  grid-template-columns: 56px 60px 1.5fr 70px 130px 80px 90px 80px;
+  grid-template-columns: 56px 56px 1.3fr 1fr 120px 70px 92px 72px;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
@@ -377,6 +377,8 @@
 }
 .ac-tr:hover { background: var(--surface-2); }
 .ac-tr-hidden { opacity: 0.45; }
+.ac-tr-model { cursor: pointer; }
+.ac-td-variants { font-size: 12px; color: var(--text-mute); }
 .ac-tr-stock-low .ac-td-stock .ac-stock-pill { background: rgba(255,169,64,0.15); color: var(--warn); }
 .ac-tr-order { cursor: pointer; }
 .ac-td-img img {
@@ -670,6 +672,10 @@
 .ac-edit-hint { font-size: 12px; color: var(--text-mute); margin: 2px 0 0; }
 .ac-edit-variants tr.ac-var-off { opacity: .45; }
 .ac-edit-variants tr.ac-var-off:hover { opacity: .75; }
+.ac-edit-size { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-1); display: flex; flex-direction: column; gap: 8px; }
+.ac-edit-size-head { display: flex; align-items: center; gap: 10px; }
+.ac-edit-size-name { width: 130px; font-weight: 700 !important; }
+.ac-edit-size-meta { font-size: 12px; color: var(--text-mute); margin-right: auto; }
 .ac-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ac-modal { width: min(440px, 100%); background: var(--surface-1); border: 1px solid var(--border-glow); border-radius: 18px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; max-height: 90vh; }
 .ac-modal-head { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
@@ -834,7 +840,7 @@
   .ac-kpis { grid-template-columns: repeat(2, 1fr); }
   .ac-grid-2 { grid-template-columns: 1fr; }
   .ac-table-head, .ac-tr {
-    grid-template-columns: 48px 50px 1.2fr 70px 110px 70px 70px 70px;
+    grid-template-columns: 48px 48px 1.1fr 1fr 100px 64px 80px 64px;
     font-size: 13px;
   }
 }

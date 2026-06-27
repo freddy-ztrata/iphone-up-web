@@ -326,6 +326,42 @@ function adminApp() {
       this.prodEditor.draft.models = this.prodEditor.draft.models.filter(m => m !== model);
     },
 
+    // --- Resumen por modelo (para la tabla de catálogo, 1 fila por modelo) ---
+    modelVariantSummary(model) {
+      const caps = new Set((model.storages || []).map(v => v.s)).size;
+      const cols = new Set((model.storages || []).map(v => v.color || "").filter(Boolean)).size;
+      return `${caps} cap · ${cols} color${cols === 1 ? "" : "es"}`;
+    },
+    modelPriceRange(model) {
+      const ps = (model.storages || []).map(v => Number(v.p)).filter(n => n > 0);
+      if (!ps.length) return "—";
+      const mn = Math.min(...ps), mx = Math.max(...ps);
+      return mn === mx ? this.fmtCLP(mn) : this.fmtCLP(mn) + " – " + this.fmtCLP(mx);
+    },
+    modelStockTotal(model) { return (model.storages || []).reduce((a, v) => a + (Number(v.stock) || 0), 0); },
+    modelActiveCount(model) { return (model.storages || []).filter(v => v.is_active).length; },
+
+    // --- Agrupado capacidad → color (para el editor) ---
+    modelSizes(model) {
+      const out = [];
+      (model.storages || []).forEach(v => { if (!out.includes(v.s)) out.push(v.s); });
+      return out;
+    },
+    colorsOfSize(model, size) { return (model.storages || []).filter(v => v.s === size); },
+    addColorToSize(model, size) {
+      const sib = (model.storages || []).find(v => v.s === size);
+      model.storages.push({ s: size, color: "", p: sib ? sib.p : 0, stock: 0, variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+    },
+    addSizeDraft(model) {
+      model.storages.push({ s: "Nueva", color: "", p: 0, stock: 0, variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+    },
+    removeSize(model, size) { model.storages = model.storages.filter(v => v.s !== size); },
+    renameSize(model, oldSize, newSize) {
+      const ns = (newSize || "").trim();
+      if (!ns) return;
+      (model.storages || []).forEach(v => { if (v.s === oldSize) v.s = ns; });
+    },
+
     // Stock absoluto → delta (usado por el editor rápido de la tabla).
     async setStockValue(st, newVal) {
       const target = Math.round(Number(newVal));

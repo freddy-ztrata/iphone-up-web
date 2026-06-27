@@ -243,53 +243,42 @@
             <div class="ac-th ac-th-img"></div>
             <div class="ac-th ac-th-line">Línea</div>
             <div class="ac-th ac-th-name">Modelo</div>
-            <div class="ac-th ac-th-storage">Storage</div>
+            <div class="ac-th ac-th-storage">Variantes</div>
             <div class="ac-th ac-th-price">Precio</div>
             <div class="ac-th ac-th-stock">Stock</div>
-            <div class="ac-th ac-th-state">Estado</div>
+            <div class="ac-th ac-th-state">Activas</div>
             <div class="ac-th ac-th-actions"></div>
           </div>
           <template x-for="product in products" :key="product.id">
             <template x-for="(model, mIdx) in product.models" :key="product.id + '-' + model.model_id">
-              <template x-for="(storage, sIdx) in model.storages" :key="product.id + '-' + model.model_id + '-' + storage.variant_id">
-                <div class="ac-tr" :class="{ 'ac-tr-hidden': product.hidden, 'ac-tr-stock-low': storage.stock <= 2 }">
-                  <div class="ac-td ac-td-img">
-                    <img :src="model.img || product.img" alt="" />
-                  </div>
-                  <div class="ac-td ac-td-line">
-                    <span class="ac-line-pill" x-text="product.line"></span>
-                  </div>
-                  <div class="ac-td ac-td-name">
-                    <span x-text="model.name"></span>
-                    <span class="ac-sealed-tag" x-show="model.sealed">SELLADO</span>
-                  </div>
-                  <div class="ac-td ac-td-storage" x-text="storage.s"></div>
-                  <div class="ac-td ac-td-price">
-                    <input class="ac-inline-input ac-mono"
-                           type="number"
-                           :value="storage.p"
-                           @change="updateVariantPrice(storage.variant_id, $event.target.value, storage)"
-                           @keydown.enter="$event.target.blur()" />
-                  </div>
-                  <div class="ac-td ac-td-stock">
-                    <button class="ac-stock-pill"
-                            :class="{ low: storage.stock <= 2, zero: storage.stock === 0 }"
-                            @click="openStockPopover(storage)"
-                            x-text="storage.stock"></button>
-                  </div>
-                  <div class="ac-td ac-td-state">
-                    <span class="ac-state-pill"
-                          :class="{ 'state-hidden': product.hidden }"
-                          x-text="product.hidden ? 'Oculto' : 'Visible'"></span>
-                  </div>
-                  <div class="ac-td ac-td-actions">
-                    <button class="ac-icon-btn" @click="openProductEditor(product.id)" title="Editar">✎</button>
-                    <button class="ac-icon-btn" @click="toggleHidden(product)" :title="product.hidden ? 'Mostrar' : 'Ocultar'">
-                      <span x-text="product.hidden ? '◯' : '●'"></span>
-                    </button>
-                  </div>
+              <div class="ac-tr ac-tr-model" :class="{ 'ac-tr-hidden': product.hidden }" @click="openProductEditor(product.id)">
+                <div class="ac-td ac-td-img">
+                  <img :src="model.img || product.img" alt="" />
                 </div>
-              </template>
+                <div class="ac-td ac-td-line">
+                  <span class="ac-line-pill" x-text="product.line"></span>
+                </div>
+                <div class="ac-td ac-td-name">
+                  <span x-text="model.name"></span>
+                  <span class="ac-sealed-tag" x-show="model.sealed">SELLADO</span>
+                </div>
+                <div class="ac-td ac-td-storage ac-td-variants" x-text="modelVariantSummary(model)"></div>
+                <div class="ac-td ac-td-price ac-mono" x-text="modelPriceRange(model)"></div>
+                <div class="ac-td ac-td-stock">
+                  <span class="ac-stock-pill" :class="{ zero: modelStockTotal(model) === 0 }" x-text="modelStockTotal(model)"></span>
+                </div>
+                <div class="ac-td ac-td-state">
+                  <span class="ac-state-pill"
+                        :class="{ 'state-hidden': product.hidden || modelActiveCount(model) === 0 }"
+                        x-text="product.hidden ? 'Oculto' : (modelActiveCount(model) + '/' + (model.storages ? model.storages.length : 0))"></span>
+                </div>
+                <div class="ac-td ac-td-actions" @click.stop>
+                  <button class="ac-icon-btn" @click="openProductEditor(product.id)" title="Editar">✎</button>
+                  <button class="ac-icon-btn" @click="toggleHidden(product)" :title="product.hidden ? 'Mostrar' : 'Ocultar'">
+                    <span x-text="product.hidden ? '◯' : '●'"></span>
+                  </button>
+                </div>
+              </div>
             </template>
           </template>
           <p class="ac-empty" x-show="!loadingProducts && products.length === 0">
@@ -604,22 +593,32 @@
                 </div>
               </div>
               <p class="ac-edit-hint" x-show="!model.model_id">Guarda el producto para poder subir fotos a este modelo nuevo.</p>
-              <table class="ac-edit-variants">
-                <thead><tr><th>Capacidad</th><th>Color</th><th>Precio</th><th>Stock</th><th>Activo</th><th></th></tr></thead>
-                <tbody>
-                  <template x-for="(st, si) in model.storages" :key="st.variant_id ?? ('newv-' + si)">
-                    <tr :class="{ 'ac-var-off': !st.is_active }">
-                      <td><input x-model="st.s" /></td>
-                      <td><input x-model="st.color" placeholder="Color" /></td>
-                      <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
-                      <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
-                      <td style="text-align:center"><input type="checkbox" x-model="st.is_active" /></td>
-                      <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar variante">🗑</button></td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-              <button class="ac-btn-ghost ac-btn-sm" @click="addVariantDraft(model)">+ Variante</button>
+              <div class="ac-edit-section-title">Capacidades y colores</div>
+              <template x-for="size in modelSizes(model)" :key="size">
+                <div class="ac-edit-size">
+                  <div class="ac-edit-size-head">
+                    <input class="ac-edit-size-name" :value="size" @change="renameSize(model, size, $event.target.value)" placeholder="Capacidad" />
+                    <span class="ac-edit-size-meta" x-text="colorsOfSize(model, size).length + ' color' + (colorsOfSize(model, size).length === 1 ? '' : 'es')"></span>
+                    <button class="ac-icon-btn" @click="removeSize(model, size)" title="Eliminar capacidad">🗑</button>
+                  </div>
+                  <table class="ac-edit-variants">
+                    <thead><tr><th>Color</th><th>Precio</th><th>Stock</th><th>Activo</th><th></th></tr></thead>
+                    <tbody>
+                      <template x-for="st in colorsOfSize(model, size)" :key="st.variant_id ?? st._k">
+                        <tr :class="{ 'ac-var-off': !st.is_active }">
+                          <td><input x-model="st.color" placeholder="Color" /></td>
+                          <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
+                          <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
+                          <td style="text-align:center"><input type="checkbox" x-model="st.is_active" /></td>
+                          <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar color">🗑</button></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <button class="ac-btn-ghost ac-btn-sm" @click="addColorToSize(model, size)">+ Color</button>
+                </div>
+              </template>
+              <button class="ac-btn-ghost ac-btn-sm" @click="addSizeDraft(model)">+ Capacidad</button>
             </div>
           </template>
           <button class="ac-btn-ghost" @click="addModelDraft()">+ Agregar modelo</button>
