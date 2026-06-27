@@ -23,6 +23,9 @@ try { seedIfEmpty(); } catch (err) { console.error("[boot] seed failed:", err.me
 // Genera variantes capacidad × color (colores reales de Apple, desactivadas). Idempotente.
 try { require("./lib/color-seed").seedColorsIfNeeded(); } catch (err) { console.error("[boot] color seed failed:", err.message); }
 
+// Producto de prueba ($500, activo) para testear el flujo de compra. Idempotente (una vez).
+try { require("./lib/test-product").ensureTestProduct(); } catch (err) { console.error("[boot] test product failed:", err.message); }
+
 // Routers
 const mercadopagoRouter = require("./routes/mercadopago");
 const chilexpressRouter = require("./routes/chilexpress");
