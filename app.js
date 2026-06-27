@@ -355,6 +355,36 @@ function bindNav() {
   $$("#nav-drawer a").forEach(a => a.addEventListener("click", () => drawer.classList.remove("open")));
 }
 
+// ---------- Secciones con ruta limpia (/catalogo, /tienda, …) ----------
+// Cada sección del home tiene su URL propia para verse bien y aparecer en la
+// analítica. Los links navegan sin recargar (scroll suave + history.pushState),
+// y al entrar directo a /catalogo se hace scroll a la sección.
+const SECTION_BY_PATH = { "/catalogo": "catalogo", "/vende-tu-iphone": "trade-in", "/tienda": "tienda", "/soporte": "faq" };
+
+function scrollToSectionForPath(smooth) {
+  const sec = SECTION_BY_PATH[window.location.pathname];
+  if (!sec) return;
+  const target = document.getElementById(sec);
+  if (target) target.scrollIntoView(smooth ? { behavior: "smooth" } : undefined);
+}
+
+function bindSectionLinks() {
+  $$("a").forEach(a => {
+    const href = a.getAttribute("href");
+    if (!href || !SECTION_BY_PATH[href]) return;
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      const target = document.getElementById(SECTION_BY_PATH[href]);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+      if (window.location.pathname !== href) history.pushState({}, "", href);
+      const drawer = $("#nav-drawer");
+      if (drawer) drawer.classList.remove("open");
+    });
+  });
+  // Back/forward del navegador entre secciones
+  window.addEventListener("popstate", () => scrollToSectionForPath(true));
+}
+
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
   renderStats();
@@ -367,9 +397,12 @@ document.addEventListener("DOMContentLoaded", () => {
   injectFaqSchema();
   renderTestimonials();
   bindNav();
+  bindSectionLinks();
   updateCartBadge();
   // Year in footer
   $("#footer-year").textContent = new Date().getFullYear();
+  // Si entraron directo a /catalogo, /tienda, etc., posicionar en la sección.
+  scrollToSectionForPath(false);
 });
 
 // FAQPage structured data (SEO) — generado desde window.FAQS para no duplicar contenido.

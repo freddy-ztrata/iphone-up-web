@@ -213,6 +213,10 @@ app.use("/uploads", express.static(path.join(db.DATA_DIR, "uploads"), {
 // La analítica registra el pathname → cada producto aparece distinto en "páginas más vistas".
 app.get("/producto/:slug", (_req, res) => res.sendFile(path.join(ROOT, "product.html")));
 
+// Secciones del home con ruta propia (URL limpia + visible en analítica). Sirven
+// index.html; app.js hace scroll a la sección correspondiente al cargar.
+app.get(["/catalogo", "/vende-tu-iphone", "/tienda", "/soporte"], (_req, res) => res.sendFile(path.join(ROOT, "index.html")));
+
 // Sitemap generado desde el catálogo (1 URL por modelo). Se actualiza solo al activar productos.
 app.get("/sitemap.xml", (_req, res) => {
   try {
