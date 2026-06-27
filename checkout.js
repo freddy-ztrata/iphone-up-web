@@ -22,6 +22,7 @@ const state = {
   selectedCounty: null,
   selectedCountyLabel: "",
   selectedShip: null,
+  deliveryMethod: "shipping", // "shipping" (despacho) | "pickup" (retiro en tienda)
   submitting: false,
 };
 
@@ -62,13 +63,25 @@ function renderItems() {
 
 function renderTotals() {
   $("#co-subtotal").textContent = fmt(calcSubtotal());
-  $("#co-ship-cost").textContent = state.selectedShip ? "Por pagar" : "—";
+  $("#co-ship-cost").textContent = !state.selectedShip ? "—" : (state.selectedShip.code === "PICKUP" ? "Retiro en tienda" : "Por pagar");
   $("#co-total").textContent = fmt(calcTotal());
 }
 
 function renderShipping() {
   const root = $("#co-shipping");
   root.classList.remove("loading");
+
+  if (state.deliveryMethod === "pickup") {
+    root.innerHTML = `
+      <div class="co-ship-porpagar">
+        <span class="co-ship-tag">Retiro</span>
+        <div class="co-ship-info">
+          <div class="co-ship-name">Retiro en tienda — sin costo</div>
+          <div class="co-ship-meta">Retiras en Padre Mariano 98, Of. 105, Providencia. Te avisamos por Instagram (@iphoneup.cl) cuando esté listo.</div>
+        </div>
+      </div>`;
+    return;
+  }
 
   if (!state.selectedCounty) {
     root.innerHTML = `<p class="co-hint">Selecciona tu región y comuna para registrar la dirección de despacho.</p>`;
@@ -88,16 +101,19 @@ function renderShipping() {
 
 function updateSubmitEnabled() {
   const form = $("#checkout-form");
-  const ok =
+  let ok =
     form.name.value.trim() &&
     /\S+@\S+\.\S+/.test(form.email.value) &&
     form.phone.value.trim() &&
-    state.selectedRegion &&
-    state.selectedCounty &&
-    form.street.value.trim() &&
-    form.number.value.trim() &&
     state.selectedShip &&
     !state.submitting;
+  if (state.deliveryMethod === "shipping") {
+    ok = ok &&
+      state.selectedRegion &&
+      state.selectedCounty &&
+      form.street.value.trim() &&
+      form.number.value.trim();
+  }
   $("#co-submit").disabled = !ok;
 }
 
@@ -225,6 +241,28 @@ function setPorPagarShipping() {
   updateSubmitEnabled();
 }
 
+// Cambia entre "Despacho a domicilio" y "Retiro en tienda".
+function setDeliveryMethod(method) {
+  state.deliveryMethod = method;
+  const isPickup = method === "pickup";
+  $("#co-shipping-fields").style.display = isPickup ? "none" : "";
+  $("#co-pickup-info").style.display = isPickup ? "" : "none";
+  $("#co-method-shipping").classList.toggle("active", !isPickup);
+  $("#co-method-pickup").classList.toggle("active", isPickup);
+
+  if (isPickup) {
+    state.selectedShip = { code: "PICKUP", name: "Retiro en tienda", price: 0 };
+  } else {
+    // Volver a despacho: el envío depende de si ya hay comuna elegida.
+    state.selectedShip = state.selectedCounty
+      ? { code: "POR_PAGAR", name: "Envío por pagar (Chilexpress)", price: 0 }
+      : null;
+  }
+  renderShipping();
+  renderTotals();
+  updateSubmitEnabled();
+}
+
 // ---------- Submit ----------
 async function onSubmit(e) {
   e.preventDefault();
@@ -238,10 +276,18 @@ async function onSubmit(e) {
     phone: form.phone.value.trim(),
   };
 
-  const shipping = {
+  const isPickup = state.deliveryMethod === "pickup";
+  const shipping = isPickup ? {
+    name: "Retiro en tienda",
+    cost: 0,
+    serviceCode: "PICKUP",
+    method: "pickup",
+    address: { store: "Padre Mariano 98, Of. 105, Providencia, Santiago" },
+  } : {
     name: state.selectedShip.name,
     cost: state.selectedShip.price,
     serviceCode: state.selectedShip.code,
+    method: "shipping",
     address: {
       region: state.selectedRegionLabel || "",
       regionCode: state.selectedRegion || "",
@@ -332,6 +378,10 @@ function init() {
   form.addEventListener("input", updateSubmitEnabled);
   form.addEventListener("change", updateSubmitEnabled);
   form.addEventListener("submit", onSubmit);
+
+  $("#co-method-shipping").addEventListener("click", () => setDeliveryMethod("shipping"));
+  $("#co-method-pickup").addEventListener("click", () => setDeliveryMethod("pickup"));
+  setDeliveryMethod("shipping");
 }
 
 document.addEventListener("DOMContentLoaded", init);

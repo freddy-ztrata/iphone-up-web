@@ -575,11 +575,11 @@ function adminApp() {
           </div>
           <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">Cliente</h3>
           <p style="margin:0;font-size:14px">${o.buyer?.name || "—"}<br/><span style="color:var(--text-dim)">${o.buyer?.email || ""}</span><br/><span style="color:var(--text-dim)">${o.buyer?.phone || ""}</span></p>
-          <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">Envío</h3>
-          <p style="margin:0;font-size:14px">${o.shipping?.address?.street || ""} ${o.shipping?.address?.number || ""}, ${o.shipping?.address?.county || ""}, ${o.shipping?.address?.region || ""}</p>
+          <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? 'Retiro en tienda' : 'Envío'}</h3>
+          <p style="margin:0;font-size:14px">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? '🏬 ' + (o.shipping?.address?.store || 'Padre Mariano 98, Of. 105, Providencia') : ((o.shipping?.address?.street || '') + ' ' + (o.shipping?.address?.number || '') + ', ' + (o.shipping?.address?.county || '') + ', ' + (o.shipping?.address?.region || ''))}</p>
           <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">Items</h3>
           ${items}
-          <div style="display:flex;justify-content:space-between;padding:8px 0;color:var(--text-dim)"><span>Envío</span><span class="ac-mono">${this.fmtCLP(o.shipping_cost || 0)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;color:var(--text-dim)"><span>Envío</span><span class="ac-mono">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? 'Retiro en tienda' : (Number(o.shipping_cost) > 0 ? this.fmtCLP(o.shipping_cost) : 'Por pagar')}</span></div>
           <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:800;font-size:18px;color:var(--accent)"><span>Total</span><span class="ac-mono">${this.fmtCLP(o.total)}</span></div>
           ${o.buyer?.phone ? `<a href="https://wa.me/${o.buyer.phone.replace(/[^0-9]/g, '')}" target="_blank" class="ac-btn-ghost" style="display:block;text-align:center;margin-top:18px;text-decoration:none">Contactar por WhatsApp</a>` : ""}
         `;

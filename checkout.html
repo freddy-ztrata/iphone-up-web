@@ -82,35 +82,56 @@
         </section>
 
         <section class="co-section">
-          <h2>2. Dirección de despacho</h2>
-          <div class="co-row two">
-            <div class="co-field">
-              <span>Región</span>
-              <div id="co-region" class="co-dd"></div>
+          <h2>2. Entrega</h2>
+          <div class="co-method">
+            <button type="button" class="co-method-opt active" id="co-method-shipping">
+              <span class="co-method-icon">🚚</span>
+              <span class="co-method-text"><strong>Despacho a domicilio</strong><small>Chilexpress · envío por pagar</small></span>
+            </button>
+            <button type="button" class="co-method-opt" id="co-method-pickup">
+              <span class="co-method-icon">🏬</span>
+              <span class="co-method-text"><strong>Retiro en tienda</strong><small>Providencia · sin costo</small></span>
+            </button>
+          </div>
+
+          <div id="co-shipping-fields">
+            <div class="co-row two">
+              <div class="co-field">
+                <span>Región</span>
+                <div id="co-region" class="co-dd"></div>
+              </div>
+              <div class="co-field">
+                <span>Comuna</span>
+                <div id="co-county" class="co-dd"></div>
+              </div>
             </div>
-            <div class="co-field">
-              <span>Comuna</span>
-              <div id="co-county" class="co-dd"></div>
+            <div class="co-row two">
+              <label class="co-field">
+                <span>Calle</span>
+                <input type="text" name="street" autocomplete="address-line1" />
+              </label>
+              <label class="co-field">
+                <span>Número</span>
+                <input type="text" name="number" autocomplete="address-line2" />
+              </label>
+            </div>
+            <label class="co-field">
+              <span>Depto / casa / referencia (opcional)</span>
+              <input type="text" name="extra" autocomplete="address-line3" />
+            </label>
+          </div>
+
+          <div id="co-pickup-info" style="display:none">
+            <div class="co-pickup-card">
+              <strong>Retiro en nuestra tienda</strong>
+              <p>📍 Padre Mariano 98, Of. 105 — Providencia, Santiago.</p>
+              <p>Te avisaremos por Instagram (@iphoneup.cl) cuando tu pedido esté listo para retirar. Lleva tu cédula y el número de orden.</p>
             </div>
           </div>
-          <div class="co-row two">
-            <label class="co-field">
-              <span>Calle</span>
-              <input type="text" name="street" required autocomplete="address-line1" />
-            </label>
-            <label class="co-field">
-              <span>Número</span>
-              <input type="text" name="number" required autocomplete="address-line2" />
-            </label>
-          </div>
-          <label class="co-field">
-            <span>Depto / casa / referencia (opcional)</span>
-            <input type="text" name="extra" autocomplete="address-line3" />
-          </label>
         </section>
 
         <section class="co-section">
-          <h2>3. Envío</h2>
+          <h2>3. Resumen de entrega</h2>
           <div id="co-shipping" class="co-shipping">
             <p class="co-hint">Selecciona tu región y comuna para registrar la dirección de despacho.</p>
           </div>

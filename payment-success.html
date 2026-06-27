@@ -24,7 +24,7 @@
     <div class="co-section" style="text-align:center;padding:48px 28px">
       <div style="font-size:56px;line-height:1;margin-bottom:18px">✅</div>
       <h1 style="font-size:32px;font-weight:800;margin:0 0 10px">¡Pago aprobado!</h1>
-      <p style="color:#b3b3b3;font-size:16px;margin:0 0 24px">
+      <p id="ps-intro" style="color:#b3b3b3;font-size:16px;margin:0 0 24px">
         Recibimos tu pedido. Te contactaremos en las próximas horas para
         confirmar el despacho con Chilexpress.
       </p>
@@ -57,6 +57,11 @@
     if (!r.ok) throw new Error("No se pudo cargar la orden");
     const o = await r.json();
     const fmt = n => "$" + Number(n).toLocaleString("es-CL");
+    const isPickup = o.shipping && (o.shipping.method === "pickup" || o.shipping.serviceCode === "PICKUP");
+    const intro = document.getElementById("ps-intro");
+    if (intro) intro.textContent = isPickup
+      ? "Recibimos tu pedido. Te avisaremos por Instagram cuando esté listo para retirar en nuestra tienda (Padre Mariano 98, Of. 105, Providencia)."
+      : "Recibimos tu pedido. Te contactaremos en las próximas horas para coordinar el despacho con Chilexpress.";
 
     const items = o.items.map(i =>
       `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
@@ -69,7 +74,7 @@
       <div style="font-size:13px;color:#888;margin-bottom:8px">Orden <strong style="color:#fff">${o.id}</strong></div>
       ${items}
       <div style="display:flex;justify-content:space-between;margin-top:10px;color:#b3b3b3">
-        <span>Envío Chilexpress</span><span>${o.shipping && Number(o.shipping.cost) > 0 ? fmt(o.shipping.cost) : "Por pagar"}</span>
+        <span>${isPickup ? "Entrega" : "Envío Chilexpress"}</span><span>${isPickup ? "Retiro en tienda" : (o.shipping && Number(o.shipping.cost) > 0 ? fmt(o.shipping.cost) : "Por pagar")}</span>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:10px;font-weight:800;font-size:18px">
         <span>Total</span><span style="color:var(--accent,#A4E83A)">${fmt(o.total)}</span>
