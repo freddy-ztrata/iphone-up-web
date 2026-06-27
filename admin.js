@@ -569,7 +569,7 @@ function adminApp() {
         const o = await this.api("GET", "/orders/" + id);
         const items = (o.items || []).map(i =>
           `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-            <span>${i.model} ${i.storage || ""}</span><span class="ac-mono">${this.fmtCLP(i.price)}</span>
+            <span>${i.model} ${i.storage || ""}${i.color ? " · " + i.color : ""}</span><span class="ac-mono">${this.fmtCLP(i.price)}</span>
           </div>`
         ).join("");
         this.drawer.title = "Orden " + o.id;

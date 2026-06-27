@@ -101,18 +101,19 @@ function renderShipping() {
 
 function updateSubmitEnabled() {
   const form = $("#checkout-form");
+  const rutLen = form.rut.value.replace(/[^0-9kK]/gi, "").length;
+  const phoneDigits = (form.phone.value.match(/\d/g) || []).length;
+  // Todos los campos obligatorios (la "Referencia" del despacho queda opcional).
   let ok =
     form.name.value.trim() &&
     /\S+@\S+\.\S+/.test(form.email.value) &&
-    form.phone.value.trim() &&
+    phoneDigits >= 11 &&
+    rutLen >= 7 &&
+    form.instagram.value.trim() &&
     state.selectedShip &&
     !state.submitting;
   if (state.deliveryMethod === "shipping") {
-    // Datos obligatorios para envío por pagar (requeridos por la operación).
     ok = ok &&
-      form.rut.value.trim() &&
-      form.instagram.value.trim() &&
-      form.color.value.trim() &&
       state.selectedRegion &&
       state.selectedCounty &&
       form.branch.value.trim();
@@ -278,7 +279,6 @@ async function onSubmit(e) {
     email: form.email.value.trim(),
     phone: form.phone.value.trim(),
     instagram: form.instagram.value.trim(),
-    color: form.color.value.trim(),
   };
 
   const isPickup = state.deliveryMethod === "pickup";
@@ -328,6 +328,26 @@ async function onSubmit(e) {
     $("#co-error").textContent = "No fue posible crear la orden: " + err.message;
     updateSubmitEnabled();
   }
+}
+
+// ---------- Formateo de RUT y teléfono ----------
+function formatRut(v) {
+  let clean = (v || "").replace(/[^0-9kK]/g, "").toUpperCase();
+  if (clean.length === 0) return "";
+  if (clean.length === 1) return clean;
+  const dv = clean.slice(-1);
+  const body = clean.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return body + "-" + dv;
+}
+function formatPhone(v) {
+  let d = (v || "").replace(/\D/g, "");
+  if (d.startsWith("56")) d = d.slice(2);
+  d = d.slice(0, 9);
+  if (!d) return "";
+  let out = "+56 " + d[0];
+  if (d.length > 1) out += " " + d.slice(1, 5);
+  if (d.length > 5) out += " " + d.slice(5, 9);
+  return out;
 }
 
 // ---------- Init ----------
@@ -382,6 +402,10 @@ function init() {
   form.addEventListener("input", updateSubmitEnabled);
   form.addEventListener("change", updateSubmitEnabled);
   form.addEventListener("submit", onSubmit);
+
+  // Auto-formato de RUT y teléfono mientras se escribe.
+  form.rut.addEventListener("input", () => { form.rut.value = formatRut(form.rut.value); });
+  form.phone.addEventListener("input", () => { form.phone.value = formatPhone(form.phone.value); });
 
   $("#co-method-shipping").addEventListener("click", () => setDeliveryMethod("shipping"));
   $("#co-method-pickup").addEventListener("click", () => setDeliveryMethod("pickup"));
