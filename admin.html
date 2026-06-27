@@ -388,23 +388,38 @@
           </div>
         </header>
 
-        <div class="ac-table">
+        <div class="ac-table ac-orders">
           <div class="ac-table-head">
-            <div class="ac-th">ID</div>
-            <div class="ac-th">Cliente</div>
-            <div class="ac-th">Total</div>
-            <div class="ac-th">Estado</div>
-            <div class="ac-th">Fecha</div>
+            <div class="ac-th ac-oc-ord">Orden</div>
+            <div class="ac-th ac-oc-cli">Cliente</div>
+            <div class="ac-th ac-oc-deliv">Entrega</div>
+            <div class="ac-th ac-oc-total">Total</div>
+            <div class="ac-th ac-oc-state">Estado</div>
+            <div class="ac-th ac-oc-date">Fecha</div>
           </div>
           <template x-for="o in orders" :key="o.id">
             <div class="ac-tr ac-tr-order" @click="openOrderDetail(o.id)">
-              <div class="ac-td ac-mono" x-text="o.id"></div>
-              <div class="ac-td" x-text="(o.buyer && (o.buyer.name || o.buyer.email)) || '—'"></div>
-              <div class="ac-td ac-mono" x-text="fmtCLP(o.total)"></div>
-              <div class="ac-td">
+              <div class="ac-td ac-oc-ord">
+                <div class="ac-ord-id ac-mono" x-text="o.id"></div>
+                <div class="ac-ord-sub" x-show="o.itemsLabel" x-text="(o.itemCount > 1 ? o.itemCount + '× ' : '') + (o.itemsLabel || '')"></div>
+              </div>
+              <div class="ac-td ac-oc-cli">
+                <div class="ac-ord-name" x-text="(o.buyer && o.buyer.name) || '—'"></div>
+                <div class="ac-ord-sub" x-text="(o.buyer && (o.buyer.instagram || o.buyer.email || o.buyer.phone)) || ''"></div>
+              </div>
+              <div class="ac-td ac-oc-deliv">
+                <span class="ac-deliv-pill" :class="(o.delivery && o.delivery.method === 'pickup') ? 'is-pickup' : 'is-ship'"
+                      x-text="o.delivery ? (o.delivery.method === 'pickup' ? '🏬 Retiro' : '🚚 Despacho') : '—'"></span>
+                <div class="ac-ord-sub" x-show="o.delivery && o.delivery.method !== 'pickup' && o.delivery.county" x-text="o.delivery ? o.delivery.county : ''"></div>
+              </div>
+              <div class="ac-td ac-oc-total ac-mono ac-ord-total" x-text="fmtCLP(o.total)"></div>
+              <div class="ac-td ac-oc-state">
                 <span class="ac-state-pill" :class="'state-' + o.status" x-text="o.status"></span>
               </div>
-              <div class="ac-td" x-text="timeAgo(o.created_at)"></div>
+              <div class="ac-td ac-oc-date">
+                <div x-text="timeAgo(o.created_at)"></div>
+                <div class="ac-ord-sub" x-text="(o.created_at || '').slice(0, 16).replace('T', ' ')"></div>
+              </div>
             </div>
           </template>
           <p class="ac-empty" x-show="orders.length === 0">No hay órdenes con este filtro.</p>

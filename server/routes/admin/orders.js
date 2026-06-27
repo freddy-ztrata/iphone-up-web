@@ -15,7 +15,7 @@ const LIST = (filters) => {
   if (filters.from) { where.push("created_at >= @from"); params.from = filters.from; }
   if (filters.to) { where.push("created_at <= @to"); params.to = filters.to; }
   const sql = `
-    SELECT id, status, subtotal, shipping_cost, total, buyer_json,
+    SELECT id, status, subtotal, shipping_cost, total, buyer_json, shipping_json, items_json,
            created_at, updated_at, mp_payment_id, coupon_code
     FROM orders
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
@@ -32,11 +32,35 @@ const UPDATE_STATUS = db.prepare(`
 const DELETE_ORDER = db.prepare("DELETE FROM orders WHERE id = ?");
 
 router.get("/", (req, res) => {
-  const orders = LIST(req.query).map(o => ({
-    ...o,
-    buyer: o.buyer_json ? JSON.parse(o.buyer_json) : null,
-    buyer_json: undefined,
-  }));
+  const orders = LIST(req.query).map(o => {
+    const buyer = o.buyer_json ? JSON.parse(o.buyer_json) : null;
+    let shipping = null, items = [];
+    try { shipping = o.shipping_json ? JSON.parse(o.shipping_json) : null; } catch {}
+    try { items = o.items_json ? JSON.parse(o.items_json) : []; } catch {}
+    const itemCount = items.reduce((a, it) => a + (Number(it.qty) || 1), 0);
+    const first = items[0];
+    const itemsLabel = first ? `${first.model || "Producto"}${first.storage ? " " + first.storage : ""}` : null;
+    const isPickup = shipping && (shipping.method === "pickup" || shipping.serviceCode === "PICKUP");
+    return {
+      id: o.id,
+      status: o.status,
+      subtotal: o.subtotal,
+      shipping_cost: o.shipping_cost,
+      total: o.total,
+      coupon_code: o.coupon_code,
+      mp_payment_id: o.mp_payment_id,
+      created_at: o.created_at,
+      updated_at: o.updated_at,
+      buyer,
+      delivery: shipping ? {
+        method: isPickup ? "pickup" : "shipping",
+        county: shipping.address?.county || null,
+        region: shipping.address?.region || null,
+      } : null,
+      itemCount,
+      itemsLabel,
+    };
+  });
   res.json({ orders });
 });
 

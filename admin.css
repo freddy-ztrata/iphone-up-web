@@ -381,6 +381,30 @@
 .ac-td-variants { font-size: 12px; color: var(--text-mute); }
 .ac-tr-stock-low .ac-td-stock .ac-stock-pill { background: rgba(255,169,64,0.15); color: var(--warn); }
 .ac-tr-order { cursor: pointer; }
+
+/* ---- Tabla de Órdenes: grid propio (NO comparte con el catálogo) ---- */
+.ac-orders .ac-table-head, .ac-orders .ac-tr {
+  grid-template-columns: minmax(180px, 1.6fr) minmax(150px, 1.4fr) 130px 120px 110px 120px;
+  align-items: center;
+}
+.ac-orders .ac-tr { padding-top: 12px; padding-bottom: 12px; }
+.ac-orders .ac-td { min-width: 0; }
+.ac-ord-id { font-size: 12px; font-weight: 600; }
+.ac-ord-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-ord-total { font-weight: 700; }
+.ac-ord-sub { font-size: 12px; color: var(--text-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-deliv-pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.ac-deliv-pill.is-pickup { background: rgba(164,232,58,0.14); color: var(--accent); }
+.ac-deliv-pill.is-ship { background: var(--surface-3); color: var(--text); }
+@media (max-width: 1024px) {
+  .ac-orders .ac-table-head, .ac-orders .ac-tr {
+    grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1.3fr) 120px 100px 100px 100px;
+  }
+}
+@media (max-width: 720px) {
+  .ac-orders .ac-table-head, .ac-orders .ac-tr { grid-template-columns: 1.5fr 92px 96px; }
+  .ac-orders .ac-oc-cli, .ac-orders .ac-oc-deliv, .ac-orders .ac-oc-date { display: none; }
+}
 .ac-td-img img {
   width: 40px; height: 40px;
   object-fit: contain;
