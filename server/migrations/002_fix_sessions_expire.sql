@@ -8,10 +8,12 @@
 --
 -- Las sesiones son efímeras: recrear la tabla solo obliga a volver a iniciar
 -- sesión. No afecta productos, órdenes, usuarios ni stock.
+-- NOTA: el orden correcto es (sid, sess, expire) — ver migración 003, que
+-- corrige el desfase de columnas que esta versión introdujo originalmente.
 DROP TABLE IF EXISTS sessions;
 CREATE TABLE IF NOT EXISTS sessions (
   sid     TEXT PRIMARY KEY,
-  expire  INTEGER NOT NULL,
-  sess    TEXT NOT NULL
+  sess    TEXT NOT NULL,
+  expire  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);

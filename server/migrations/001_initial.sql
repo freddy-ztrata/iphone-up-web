@@ -24,10 +24,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- con "no such column: expire" en CADA request que lleva cookie de sesión
 -- (síntoma: Internal Server Error solo para usuarios logueados). La 002 repara
 -- las DBs que ya se crearon con el nombre equivocado.
+-- El ORDEN importa: la librería hace INSERT posicional (sid, sess, expire).
 CREATE TABLE IF NOT EXISTS sessions (
   sid         TEXT PRIMARY KEY,
-  expire      INTEGER NOT NULL,
-  sess        TEXT NOT NULL
+  sess        TEXT NOT NULL,
+  expire      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);
 
