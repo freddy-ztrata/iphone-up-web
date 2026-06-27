@@ -605,13 +605,15 @@
               </div>
               <p class="ac-edit-hint" x-show="!model.model_id">Guarda el producto para poder subir fotos a este modelo nuevo.</p>
               <table class="ac-edit-variants">
-                <thead><tr><th>Capacidad</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
+                <thead><tr><th>Capacidad</th><th>Color</th><th>Precio</th><th>Stock</th><th>Activo</th><th></th></tr></thead>
                 <tbody>
                   <template x-for="(st, si) in model.storages" :key="st.variant_id ?? ('newv-' + si)">
-                    <tr>
+                    <tr :class="{ 'ac-var-off': !st.is_active }">
                       <td><input x-model="st.s" /></td>
+                      <td><input x-model="st.color" placeholder="Color" /></td>
                       <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
                       <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
+                      <td style="text-align:center"><input type="checkbox" x-model="st.is_active" /></td>
                       <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar variante">🗑</button></td>
                     </tr>
                   </template>

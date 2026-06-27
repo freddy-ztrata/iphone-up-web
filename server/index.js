@@ -20,6 +20,9 @@ const backup = require("./lib/backup");
 // Seed inicial del catálogo (solo si la tabla products está vacía)
 try { seedIfEmpty(); } catch (err) { console.error("[boot] seed failed:", err.message); }
 
+// Genera variantes capacidad × color (colores reales de Apple, desactivadas). Idempotente.
+try { require("./lib/color-seed").seedColorsIfNeeded(); } catch (err) { console.error("[boot] color seed failed:", err.message); }
+
 // Routers
 const mercadopagoRouter = require("./routes/mercadopago");
 const chilexpressRouter = require("./routes/chilexpress");

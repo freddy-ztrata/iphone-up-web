@@ -314,7 +314,7 @@ function adminApp() {
     // --- Mutaciones SOLO en el borrador (no tocan el servidor hasta Guardar) ---
     addVariantDraft(model) {
       const last = model.storages[model.storages.length - 1];
-      model.storages.push({ s: "128GB", p: last ? last.p : 0, stock: 0, variant_id: null });
+      model.storages.push({ s: "128GB", color: "", p: last ? last.p : 0, stock: 0, variant_id: null, is_active: false });
     },
     removeVariantDraft(model, st) {
       model.storages = model.storages.filter(x => x !== st);
@@ -370,9 +370,9 @@ function adminApp() {
           }
           for (const s of m.storages) {
             if (!s.variant_id) {
-              await this.api("POST", "/products/models/" + modelId + "/variants", { storage: s.s, price: Math.round(Number(s.p)) || 0, stock: Math.round(Number(s.stock)) || 0 });
+              await this.api("POST", "/products/models/" + modelId + "/variants", { storage: s.s, color: s.color || "", price: Math.round(Number(s.p)) || 0, stock: Math.round(Number(s.stock)) || 0, is_active: !!s.is_active });
             } else {
-              await this.api("PATCH", "/products/variants/" + s.variant_id, { storage: s.s, price: Math.round(Number(s.p)) || 0 });
+              await this.api("PATCH", "/products/variants/" + s.variant_id, { storage: s.s, color: s.color || "", price: Math.round(Number(s.p)) || 0, is_active: !!s.is_active });
               const ov = origVars.find(x => x.variant_id === s.variant_id);
               const origStock = ov ? Number(ov.stock) : 0;
               const newStock = Number(s.stock) || 0;

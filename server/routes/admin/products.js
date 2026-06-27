@@ -15,7 +15,7 @@ const router = express.Router();
 // PRODUCTOS
 // =========================================================
 const SEL_PRODUCT = db.prepare("SELECT * FROM products WHERE id = ?");
-const SEL_PRODUCT_FULL = (id) => buildCatalog({ includeHidden: true, includeStock: true, includeIds: true })
+const SEL_PRODUCT_FULL = (id) => buildCatalog({ includeHidden: true, includeStock: true, includeIds: true, includeInactive: true })
   .find(p => p.id === id);
 
 const INSERT_PRODUCT = db.prepare(`
@@ -36,7 +36,7 @@ const DELETE_PRODUCT = db.prepare("DELETE FROM products WHERE id = ?");
 const NEXT_PRODUCT_ID = db.prepare("SELECT COALESCE(MAX(id), 0) + 1 AS next FROM products");
 
 router.get("/", (req, res) => {
-  const list = buildCatalog({ includeHidden: true, includeStock: true, includeIds: true });
+  const list = buildCatalog({ includeHidden: true, includeStock: true, includeIds: true, includeInactive: true });
   res.json({ products: list });
 });
 
@@ -172,12 +172,13 @@ router.delete("/models/:modelId", (req, res) => {
 // =========================================================
 const SEL_VARIANT = db.prepare("SELECT * FROM variants WHERE id = ?");
 const INSERT_VARIANT = db.prepare(`
-  INSERT INTO variants (model_id, storage, price, compare_at_price, stock, sku, position)
-  VALUES (@model_id, @storage, @price, @compare_at_price, @stock, @sku, @position)
+  INSERT INTO variants (model_id, storage, color, price, compare_at_price, stock, sku, position, is_active)
+  VALUES (@model_id, @storage, @color, @price, @compare_at_price, @stock, @sku, @position, @is_active)
 `);
 const UPDATE_VARIANT = db.prepare(`
   UPDATE variants SET
     storage = COALESCE(@storage, storage),
+    color = COALESCE(@color, color),
     price = COALESCE(@price, price),
     compare_at_price = COALESCE(@compare_at_price, compare_at_price),
     sku = COALESCE(@sku, sku),
@@ -198,12 +199,12 @@ const ALL_VARIANTS = db.prepare("SELECT id, price FROM variants");
 
 router.post("/models/:modelId/variants", (req, res) => {
   const model_id = parseInt(req.params.modelId, 10);
-  const { storage, price, compare_at_price, stock: initialStock, sku } = req.body || {};
+  const { storage, color, price, compare_at_price, stock: initialStock, sku, is_active } = req.body || {};
   if (!storage || price == null) return res.status(400).json({ error: "storage y price requeridos" });
   const position = COUNT_VARIANTS_OF.get(model_id).n;
   const r = INSERT_VARIANT.run({
-    model_id, storage, price: Math.round(price), compare_at_price: compare_at_price || null,
-    stock: initialStock || 0, sku: sku || null, position,
+    model_id, storage, color: color || null, price: Math.round(price), compare_at_price: compare_at_price || null,
+    stock: initialStock || 0, sku: sku || null, position, is_active: is_active ? 1 : 0,
   });
   const variant = SEL_VARIANT.get(r.lastInsertRowid);
   audit.log(req, { action: "create", entity_type: "variant", entity_id: variant.id, after: variant });
@@ -214,9 +215,10 @@ router.patch("/variants/:variantId", (req, res) => {
   const id = parseInt(req.params.variantId, 10);
   const before = SEL_VARIANT.get(id);
   if (!before) return res.status(404).json({ error: "No existe" });
-  const { storage, price, compare_at_price, sku, position, is_active } = req.body || {};
+  const { storage, color, price, compare_at_price, sku, position, is_active } = req.body || {};
   UPDATE_VARIANT.run({
     id, storage: storage ?? null,
+    color: color ?? null,
     price: price == null ? null : Math.round(price),
     compare_at_price: compare_at_price ?? null,
     sku: sku ?? null, position: position ?? null,

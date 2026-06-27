@@ -19,9 +19,23 @@ const SELECT_MODELS_FOR_PRODUCT = db.prepare(`
 `);
 
 const SELECT_VARIANTS_FOR_MODEL = db.prepare(`
-  SELECT id, model_id, storage, price, compare_at_price, stock, sku, position
+  SELECT id, model_id, storage, color, price, compare_at_price, stock, sku, position
   FROM variants
   WHERE model_id = ? AND is_active = 1
+  ORDER BY position ASC, id ASC
+`);
+
+// Versiones SIN filtro is_active (para el admin: incluye variantes/modelos inactivos).
+const SELECT_ALL_MODELS_FOR_PRODUCT = db.prepare(`
+  SELECT id, product_id, name, img, sealed, tagline, position, is_active
+  FROM product_models
+  WHERE product_id = ?
+  ORDER BY position ASC, id ASC
+`);
+const SELECT_ALL_VARIANTS_FOR_MODEL = db.prepare(`
+  SELECT id, model_id, storage, color, price, compare_at_price, stock, sku, position, is_active
+  FROM variants
+  WHERE model_id = ?
   ORDER BY position ASC, id ASC
 `);
 
@@ -42,7 +56,7 @@ const SELECT_ALL_MODEL_IMAGES = db.prepare(`
  * @param {boolean} [opts.includeIds=false]      incluir IDs internos (admin)
  */
 function buildCatalog(opts = {}) {
-  const { includeHidden = false, includeStock = false, includeIds = false } = opts;
+  const { includeHidden = false, includeStock = false, includeIds = false, includeInactive = false } = opts;
 
   const products = SELECT_PRODUCTS.all().filter(p => includeHidden || !p.hidden);
 
@@ -54,12 +68,16 @@ function buildCatalog(opts = {}) {
   }
 
   return products.map(p => {
-    const models = SELECT_MODELS_FOR_PRODUCT.all(p.id).map(m => {
-      const variants = SELECT_VARIANTS_FOR_MODEL.all(m.id).map(v => {
+    const modelRows = (includeInactive ? SELECT_ALL_MODELS_FOR_PRODUCT : SELECT_MODELS_FOR_PRODUCT).all(p.id);
+    const models = modelRows.map(m => {
+      const variantRows = (includeInactive ? SELECT_ALL_VARIANTS_FOR_MODEL : SELECT_VARIANTS_FOR_MODEL).all(m.id);
+      const variants = variantRows.map(v => {
         const storage = { s: v.storage, p: v.price };
+        if (v.color) storage.color = v.color;
         if (v.compare_at_price) storage.compare_at = v.compare_at_price;
         if (includeStock) storage.stock = v.stock;
         if (includeIds) storage.variant_id = v.id;
+        if (includeInactive) storage.is_active = !!v.is_active;
         return storage;
       });
 
@@ -71,6 +89,7 @@ function buildCatalog(opts = {}) {
       };
       if (m.tagline) model.tagline = m.tagline;
       if (includeIds) model.model_id = m.id;
+      if (includeInactive) model.is_active = !!m.is_active;
       model.gallery = imagesByModel.get(m.id) || [];
       return model;
     });
