@@ -103,11 +103,16 @@ app.get("/api/_diag/session", (req, res) => {
   const info = {
     reqSecure: req.secure,
     forwardedProto: req.headers["x-forwarded-proto"] || null,
-    protocol: req.protocol,
     nodeEnv: process.env.NODE_ENV || null,
-    cookieSecure: IS_PROD,
     hasCookie: Boolean(req.headers.cookie),
+    now: Date.now(),
   };
+  try { info.schema = db.prepare("PRAGMA table_info(sessions)").all().map(c => `${c.cid}:${c.name}:${c.type}`); }
+  catch (e) { info.schemaErr = e.message; }
+  try { info.sessionsCount = db.prepare("SELECT COUNT(*) AS n FROM sessions").get().n; }
+  catch (e) { info.countErr = e.message; }
+  try { info.rows = db.prepare("SELECT sid, expire, sess FROM sessions ORDER BY rowid DESC LIMIT 3").all(); }
+  catch (e) { info.rowsErr = e.message; }
   if (!req.session.diagToken) {
     req.session.diagToken = "tok-" + Date.now();
     return res.json({ phase: "set", diagToken: req.session.diagToken, ...info });
