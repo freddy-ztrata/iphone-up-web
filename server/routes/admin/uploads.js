@@ -32,6 +32,9 @@ const INSERT_IMAGE = db.prepare(`
 `);
 const DELETE_IMAGE = db.prepare("DELETE FROM images WHERE id = ?");
 const GET_IMAGE = db.prepare("SELECT * FROM images WHERE id = ?");
+const UPDATE_IMAGE = db.prepare(`
+  UPDATE images SET alt = COALESCE(@alt, alt), position = COALESCE(@position, position) WHERE id = @id
+`);
 
 router.post("/image", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Sin archivo" });
@@ -61,6 +64,25 @@ router.post("/image", upload.single("file"), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Actualiza alt / position de una imagen.
+router.patch("/image/:id", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const before = GET_IMAGE.get(id);
+  if (!before) return res.status(404).json({ error: "No existe" });
+  const { alt, position } = req.body || {};
+  UPDATE_IMAGE.run({ id, alt: alt ?? null, position: position == null ? null : Number(position) });
+  res.json(GET_IMAGE.get(id));
+});
+
+// Reordena la galería: recibe { ids: [idEnOrden...] } y fija position por índice.
+router.post("/reorder", (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids)) return res.status(400).json({ error: "ids debe ser un array" });
+  const upd = db.prepare("UPDATE images SET position = ? WHERE id = ?");
+  db.transaction(() => { ids.forEach((id, i) => upd.run(i, Number(id))); })();
+  res.json({ ok: true });
 });
 
 router.delete("/image/:id", (req, res) => {

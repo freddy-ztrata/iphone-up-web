@@ -25,6 +25,13 @@ const SELECT_VARIANTS_FOR_MODEL = db.prepare(`
   ORDER BY position ASC, id ASC
 `);
 
+const SELECT_ALL_MODEL_IMAGES = db.prepare(`
+  SELECT owner_id, id, url, alt, position
+  FROM images
+  WHERE owner_type = 'model'
+  ORDER BY owner_id ASC, position ASC, id ASC
+`);
+
 /**
  * Construye el array de catálogo en el shape histórico de data.js:
  *   [{ id, line, year, img, hidden, models: [{ name, img, sealed, storages: [{s,p}] }] }]
@@ -38,6 +45,13 @@ function buildCatalog(opts = {}) {
   const { includeHidden = false, includeStock = false, includeIds = false } = opts;
 
   const products = SELECT_PRODUCTS.all().filter(p => includeHidden || !p.hidden);
+
+  // Galería de fotos por modelo (tabla images). Una sola consulta agrupada.
+  const imagesByModel = new Map();
+  for (const im of SELECT_ALL_MODEL_IMAGES.all()) {
+    if (!imagesByModel.has(im.owner_id)) imagesByModel.set(im.owner_id, []);
+    imagesByModel.get(im.owner_id).push({ id: im.id, url: im.url, alt: im.alt || "", position: im.position });
+  }
 
   return products.map(p => {
     const models = SELECT_MODELS_FOR_PRODUCT.all(p.id).map(m => {
@@ -57,6 +71,7 @@ function buildCatalog(opts = {}) {
       };
       if (m.tagline) model.tagline = m.tagline;
       if (includeIds) model.model_id = m.id;
+      model.gallery = imagesByModel.get(m.id) || [];
       return model;
     });
 

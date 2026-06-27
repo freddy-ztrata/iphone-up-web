@@ -497,9 +497,17 @@
             <label class="ac-edit-field"><span>Año</span>
               <input type="number" x-model.number="prodEditor.product.year" @change="saveProduct('year', prodEditor.product.year)" />
             </label>
-            <label class="ac-edit-field" style="grid-column:1/-1"><span>Imagen principal (ruta)</span>
-              <input x-model="prodEditor.product.img" @change="saveProduct('hero_img', prodEditor.product.img)" placeholder="assets/iphones/iphone-15.webp" />
-            </label>
+            <div class="ac-edit-field" style="grid-column:1/-1">
+              <span>Imagen principal de la línea</span>
+              <div class="ac-hero-edit">
+                <img class="ac-hero-preview" :src="prodEditor.product.img || ''" alt="" x-show="prodEditor.product.img" />
+                <input x-model="prodEditor.product.img" @change="saveProduct('hero_img', prodEditor.product.img)" placeholder="ruta o sube una foto →" />
+                <label class="ac-btn-ghost ac-btn-sm ac-upload-btn">
+                  <input type="file" accept="image/*" @change="uploadProductHero(prodEditor.product, $event.target.files); $event.target.value=''" hidden />
+                  ⬆ Subir
+                </label>
+              </div>
+            </div>
             <label class="ac-edit-checkbox" style="grid-column:1/-1">
               <input type="checkbox" :checked="!prodEditor.product.hidden" @change="toggleProductHidden(prodEditor.product, $event.target.checked)" />
               <span>Visible en la web</span>
@@ -514,9 +522,35 @@
                 <label class="ac-edit-checkbox"><input type="checkbox" x-model="model.sealed" @change="saveModel(model, 'sealed', model.sealed)" /><span>Sellado</span></label>
                 <button class="ac-icon-btn" @click="deleteModel(model)" title="Eliminar modelo">🗑</button>
               </div>
-              <label class="ac-edit-field"><span>Imagen del modelo (ruta, opcional)</span>
-                <input x-model="model.img" @change="saveModel(model, 'img', model.img)" placeholder="(usa la imagen principal si se deja vacío)" />
-              </label>
+              <div class="ac-edit-field">
+                <span>Fotos del modelo</span>
+                <div class="ac-media">
+                  <div class="ac-media-current" x-show="model.img">
+                    <img :src="model.img" alt="" />
+                    <span>Principal actual</span>
+                  </div>
+                  <div class="ac-media-grid">
+                    <template x-for="(img, gi) in (model.gallery || [])" :key="img.id">
+                      <div class="ac-media-item" :class="{ 'is-main': img.url === model.img }"
+                           draggable="true"
+                           @dragstart="galleryDragStart(model, gi)"
+                           @dragover.prevent
+                           @drop.prevent="galleryDrop(model, gi)">
+                        <img :src="img.url" alt="" draggable="false" />
+                        <div class="ac-media-actions">
+                          <button class="ac-media-btn" x-show="img.url !== model.img" @click="setModelMainImage(model, img.url)" title="Hacer principal">★</button>
+                          <button class="ac-media-btn" @click="deleteModelImage(model, img)" title="Eliminar">✕</button>
+                        </div>
+                        <span class="ac-media-main-badge" x-show="img.url === model.img">Principal</span>
+                      </div>
+                    </template>
+                    <label class="ac-media-drop" @dragover.prevent @drop.prevent="uploadModelImages(model, $event.dataTransfer.files)">
+                      <input type="file" accept="image/*" multiple @change="uploadModelImages(model, $event.target.files); $event.target.value=''" hidden />
+                      <span>＋<br/>Subir fotos</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
               <table class="ac-edit-variants">
                 <thead><tr><th>Capacidad</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
                 <tbody>

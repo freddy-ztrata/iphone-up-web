@@ -380,6 +380,77 @@ function adminApp() {
       } catch (err) { this.toast(err.message, "error"); }
     },
 
+    // ----- Galería de fotos (estilo Shopify) -----
+    async uploadModelImages(model, fileList) {
+      const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
+      if (!files.length) return;
+      if (!Array.isArray(model.gallery)) model.gallery = [];
+      let ok = 0;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("owner_type", "model");
+        fd.append("owner_id", model.model_id);
+        fd.append("position", String(model.gallery.length));
+        try {
+          const r = await fetch("/api/admin/uploads/image", { method: "POST", credentials: "include", body: fd });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || "Error al subir");
+          model.gallery.push({ id: data.id, url: data.url, alt: data.alt || "", position: data.position });
+          if (!model.img) { model.img = data.url; await this.api("PATCH", "/products/models/" + model.model_id, { img: data.url }); }
+          ok++;
+        } catch (err) { this.toast(err.message, "error"); }
+      }
+      if (ok) this.toast(ok > 1 ? `${ok} fotos subidas` : "Foto subida", "success");
+    },
+
+    async uploadProductHero(product, fileList) {
+      const file = Array.from(fileList || [])[0];
+      if (!file || !file.type || !file.type.startsWith("image/")) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("owner_type", "product");
+      fd.append("owner_id", product.id);
+      try {
+        const r = await fetch("/api/admin/uploads/image", { method: "POST", credentials: "include", body: fd });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "Error al subir");
+        product.img = data.url;
+        await this.api("PATCH", "/products/" + product.id, { hero_img: data.url });
+        this.toast("Imagen principal subida", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async setModelMainImage(model, url) {
+      model.img = url;
+      try {
+        await this.api("PATCH", "/products/models/" + model.model_id, { img: url });
+        this.toast("Imagen principal actualizada", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async deleteModelImage(model, img) {
+      if (!confirm("¿Eliminar esta foto?")) return;
+      try {
+        await this.api("DELETE", "/uploads/image/" + img.id);
+        model.gallery = model.gallery.filter(g => g.id !== img.id);
+        this.toast("Foto eliminada", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    galleryDragStart(model, index) { this._galleryDrag = { modelId: model.model_id, index }; },
+    async galleryDrop(model, targetIndex) {
+      const d = this._galleryDrag;
+      this._galleryDrag = null;
+      if (!d || d.modelId !== model.model_id || d.index == null || d.index === targetIndex) return;
+      const arr = model.gallery;
+      if (targetIndex < 0 || targetIndex >= arr.length) return;
+      const [moved] = arr.splice(d.index, 1);
+      arr.splice(targetIndex, 0, moved);
+      try { await this.api("POST", "/uploads/reorder", { ids: arr.map(g => g.id) }); }
+      catch (err) { this.toast(err.message, "error"); }
+    },
+
     // ----- Cupones -----
     newCoupon() {
       this.drawer.title = "Nuevo cupón";

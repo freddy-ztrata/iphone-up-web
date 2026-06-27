@@ -75,9 +75,11 @@ function renderAll() {
   $("#product-line-label").textContent = `· iPhone ${phone.line} · ${phone.year}`;
   $("#product-title").textContent = model.name;
 
-  // Image — use per-model image if defined, otherwise fall back to line image
-  $("#product-img").src = model.img || phone.img;
+  // Image — main + gallery thumbnails
+  const mainImg = model.img || phone.img;
+  $("#product-img").src = mainImg;
   $("#product-img").alt = model.name;
+  renderThumbs(model, mainImg);
 
   // Sealed badge
   $("#product-badge").style.display = model.sealed ? "inline-block" : "none";
@@ -142,6 +144,30 @@ function renderAll() {
 
   // Specs grid
   renderSpecs(specs);
+}
+
+// Render gallery thumbnails (imagen principal + galería subida). Oculto si ≤1 imagen.
+function renderThumbs(model, mainImg) {
+  const wrap = $("#product-thumbs");
+  if (!wrap) return;
+  const urls = [];
+  if (mainImg) urls.push(mainImg);
+  (model.gallery || []).forEach(g => { if (g && g.url && !urls.includes(g.url)) urls.push(g.url); });
+  wrap.innerHTML = "";
+  if (urls.length < 2) { wrap.style.display = "none"; return; }
+  wrap.style.display = "flex";
+  urls.forEach(u => {
+    const btn = el("button", {
+      class: "product-thumb" + (u === mainImg ? " active" : ""),
+      type: "button",
+      onclick: () => {
+        $("#product-img").src = u;
+        wrap.querySelectorAll(".product-thumb").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      },
+    }, [el("img", { src: u, alt: model.name, loading: "lazy" })]);
+    wrap.appendChild(btn);
+  });
 }
 
 // ---------- SEO: meta dinámica + structured data por producto ----------
