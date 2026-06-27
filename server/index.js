@@ -64,6 +64,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || "INSEGURO_cambiame_en_dot_env",
   resave: false,
   saveUninitialized: false,
+  proxy: true, // confía en X-Forwarded-Proto (Traefik) para decidir cookies secure
   cookie: {
     httpOnly: true,
     secure: IS_PROD,
@@ -93,6 +94,25 @@ app.get("/api/health", (_req, res) => {
     },
     db: { ok: true, products: productCount, users: userCount, path: db.DB_PATH },
   });
+});
+
+// DIAGNÓSTICO TEMPORAL — prueba el roundtrip de la cookie de sesión detrás del
+// proxy (sin necesitar login). 1ra llamada setea un token en la sesión; las
+// siguientes deberían leerlo de vuelta. Si no, la cookie no persiste.
+app.get("/api/_diag/session", (req, res) => {
+  const info = {
+    reqSecure: req.secure,
+    forwardedProto: req.headers["x-forwarded-proto"] || null,
+    protocol: req.protocol,
+    nodeEnv: process.env.NODE_ENV || null,
+    cookieSecure: IS_PROD,
+    hasCookie: Boolean(req.headers.cookie),
+  };
+  if (!req.session.diagToken) {
+    req.session.diagToken = "tok-" + Date.now();
+    return res.json({ phase: "set", diagToken: req.session.diagToken, ...info });
+  }
+  res.json({ phase: "read", diagToken: req.session.diagToken, ...info });
 });
 
 // ---------- Ruta dinámica /data.js (catálogo desde DB) ----------

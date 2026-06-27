@@ -10,7 +10,7 @@ function adminApp() {
     loggingIn: false,
 
     view: "dashboard",
-    sidebarExpanded: false,
+    sidebarExpanded: true,
     settingsTab: "users",
 
     products: [],
