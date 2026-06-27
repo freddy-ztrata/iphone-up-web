@@ -1,12 +1,15 @@
 // Checkout — iPhone UP
 // Flujo:
 //   1. Carga items desde cartStore (sessionStorage).
-//   2. Pide regiones a /api/chilexpress/regions y las llena en el <select>.
+//   2. Pide regiones a /api/chilexpress/regions y las llena en el dropdown propio.
 //   3. Al elegir región, pide comunas a /api/chilexpress/coverage.
 //   4. Al elegir comuna, registra el destino. El envío es "por pagar" (costo 0):
 //      no se cotiza precio, el cliente paga el despacho al recibir.
 //   5. Valida form + comuna seleccionada → POST /api/mercadopago/preference.
 //   6. Redirige a init_point (Mercado Pago Checkout Pro).
+//
+// Los selectores de región/comuna son dropdowns propios (no <select> nativo) para
+// que se vean con la estética del sitio y sean legibles en el tema oscuro.
 
 const $ = sel => document.querySelector(sel);
 const fmt = window.fmtCLP || (n => "$" + Number(n).toLocaleString("es-CL"));
@@ -15,11 +18,15 @@ const state = {
   items: [],
   regions: [],
   selectedRegion: null,
+  selectedRegionLabel: "",
   selectedCounty: null,
-  shipServices: [],
+  selectedCountyLabel: "",
   selectedShip: null,
   submitting: false,
 };
+
+let regionDD = null;
+let countyDD = null;
 
 function getItems() {
   return (window.cartStore && window.cartStore.read()) || [];
@@ -68,7 +75,7 @@ function renderShipping() {
     return;
   }
 
-  const countyName = $("#co-county").selectedOptions[0]?.textContent || "tu comuna";
+  const countyName = state.selectedCountyLabel || "tu comuna";
   root.innerHTML = `
     <div class="co-ship-porpagar">
       <span class="co-ship-tag">Por pagar</span>
@@ -94,6 +101,74 @@ function updateSubmitEnabled() {
   $("#co-submit").disabled = !ok;
 }
 
+// ---------- Dropdown propio (reemplaza <select> nativo) ----------
+function createDropdown(rootId, opts = {}) {
+  const { placeholder = "Selecciona…", disabled = false, onChange } = opts;
+  const root = $("#" + rootId);
+  root.classList.add("co-dd");
+  root.innerHTML = `
+    <button type="button" class="co-dd-btn" aria-haspopup="listbox" aria-expanded="false"${disabled ? " disabled" : ""}>
+      <span class="co-dd-label co-dd-placeholder"></span>
+      <svg class="co-dd-caret" width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M6 8 0 0h12z" fill="currentColor"/></svg>
+    </button>
+    <div class="co-dd-list" role="listbox" hidden></div>
+  `;
+  const btn = root.querySelector(".co-dd-btn");
+  const labelEl = root.querySelector(".co-dd-label");
+  const listEl = root.querySelector(".co-dd-list");
+
+  function open() {
+    if (btn.disabled) return;
+    listEl.hidden = false;
+    root.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+  }
+  function close() {
+    listEl.hidden = true;
+    root.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+  }
+  btn.addEventListener("click", () => { listEl.hidden ? open() : close(); });
+  document.addEventListener("click", (e) => { if (!root.contains(e.target)) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  const api = {
+    value: "",
+    label: "",
+    setItems(items) {
+      listEl.innerHTML = "";
+      if (!items.length) { listEl.innerHTML = `<div class="co-dd-empty">Sin resultados</div>`; return; }
+      items.forEach(it => {
+        const opt = document.createElement("div");
+        opt.className = "co-dd-opt";
+        opt.setAttribute("role", "option");
+        opt.textContent = it.label;
+        opt.addEventListener("click", () => {
+          api.value = it.value;
+          api.label = it.label;
+          labelEl.textContent = it.label;
+          labelEl.classList.remove("co-dd-placeholder");
+          close();
+          if (onChange) onChange(it.value, it.label);
+        });
+        listEl.appendChild(opt);
+      });
+    },
+    reset(ph) {
+      api.value = "";
+      api.label = "";
+      labelEl.textContent = ph || placeholder;
+      labelEl.classList.add("co-dd-placeholder");
+      listEl.innerHTML = "";
+      close();
+    },
+    setDisabled(d) { btn.disabled = !!d; if (d) close(); },
+    setMessage(msg) { listEl.innerHTML = `<div class="co-dd-empty">${msg}</div>`; },
+  };
+  api.reset(placeholder);
+  return api;
+}
+
 // ---------- API helpers ----------
 async function apiGet(url) {
   const r = await fetch(url);
@@ -110,43 +185,34 @@ async function apiPost(url, body) {
   return r.json();
 }
 
-// ---------- Carga de regiones ----------
+// ---------- Carga de regiones / comunas ----------
 async function loadRegions() {
-  const sel = $("#co-region");
+  regionDD.setMessage("Cargando…");
   try {
     const { regions } = await apiGet("/api/chilexpress/regions");
     state.regions = regions || [];
-    sel.innerHTML = '<option value="">Selecciona una región</option>';
-    state.regions.forEach(r => {
-      const opt = document.createElement("option");
-      opt.value = r.regionCode || r.RegionCode;
-      opt.textContent = r.regionName || r.RegionName;
-      opt.dataset.id = r.regionId || r.RegionId || "";
-      sel.appendChild(opt);
-    });
+    regionDD.setItems(state.regions.map(r => ({
+      value: r.regionCode || r.RegionCode,
+      label: r.regionName || r.RegionName,
+    })));
   } catch (err) {
     console.error(err);
-    sel.innerHTML = `<option value="">Error: ${err.message}</option>`;
+    regionDD.setMessage("Error: " + err.message);
   }
 }
 
 async function loadCounties(regionCode) {
-  const sel = $("#co-county");
-  sel.disabled = true;
-  sel.innerHTML = '<option value="">Cargando comunas…</option>';
+  countyDD.setDisabled(false);
+  countyDD.setMessage("Cargando comunas…");
   try {
     const { areas } = await apiGet(`/api/chilexpress/coverage?regionCode=${encodeURIComponent(regionCode)}`);
-    sel.innerHTML = '<option value="">Selecciona comuna</option>';
-    (areas || []).forEach(a => {
-      const opt = document.createElement("option");
-      opt.value = a.countyCode || a.CountyCode;
-      opt.textContent = a.countyName || a.CountyName;
-      sel.appendChild(opt);
-    });
-    sel.disabled = false;
+    countyDD.setItems((areas || []).map(a => ({
+      value: a.countyCode || a.CountyCode,
+      label: a.countyName || a.CountyName,
+    })));
   } catch (err) {
     console.error(err);
-    sel.innerHTML = `<option value="">Error: ${err.message}</option>`;
+    countyDD.setMessage("Error: " + err.message);
   }
 }
 
@@ -172,18 +238,15 @@ async function onSubmit(e) {
     phone: form.phone.value.trim(),
   };
 
-  const regionOpt = $("#co-region").selectedOptions[0];
-  const countyOpt = $("#co-county").selectedOptions[0];
-
   const shipping = {
     name: state.selectedShip.name,
     cost: state.selectedShip.price,
     serviceCode: state.selectedShip.code,
     address: {
-      region: regionOpt?.textContent || "",
-      regionCode: regionOpt?.value || "",
-      county: countyOpt?.textContent || "",
-      countyCode: countyOpt?.value || "",
+      region: state.selectedRegionLabel || "",
+      regionCode: state.selectedRegion || "",
+      county: state.selectedCountyLabel || "",
+      countyCode: state.selectedCounty || "",
       street: form.street.value.trim(),
       number: form.number.value.trim(),
       extra: form.extra.value.trim(),
@@ -228,34 +291,47 @@ function init() {
 
   renderItems();
   renderTotals();
+
+  regionDD = createDropdown("co-region", {
+    placeholder: "Selecciona una región",
+    onChange: (value, label) => {
+      state.selectedRegion = value;
+      state.selectedRegionLabel = label;
+      state.selectedCounty = null;
+      state.selectedCountyLabel = "";
+      state.selectedShip = null;
+      countyDD.reset("Selecciona comuna");
+      countyDD.setDisabled(!value);
+      renderShipping();
+      renderTotals();
+      if (value) loadCounties(value);
+      updateSubmitEnabled();
+    },
+  });
+
+  countyDD = createDropdown("co-county", {
+    placeholder: "Selecciona primero una región",
+    disabled: true,
+    onChange: (value, label) => {
+      state.selectedCounty = value;
+      state.selectedCountyLabel = label;
+      if (value) {
+        setPorPagarShipping();
+      } else {
+        state.selectedShip = null;
+        renderShipping();
+        renderTotals();
+        updateSubmitEnabled();
+      }
+    },
+  });
+
   loadRegions();
 
   const form = $("#checkout-form");
   form.addEventListener("input", updateSubmitEnabled);
   form.addEventListener("change", updateSubmitEnabled);
   form.addEventListener("submit", onSubmit);
-
-  $("#co-region").addEventListener("change", e => {
-    state.selectedRegion = e.target.value;
-    state.selectedCounty = null;
-    state.selectedShip = null;
-    state.shipServices = [];
-    renderShipping();
-    renderTotals();
-    if (state.selectedRegion) loadCounties(state.selectedRegion);
-    updateSubmitEnabled();
-  });
-  $("#co-county").addEventListener("change", e => {
-    state.selectedCounty = e.target.value;
-    if (state.selectedCounty) {
-      setPorPagarShipping();
-    } else {
-      state.selectedShip = null;
-      renderShipping();
-      renderTotals();
-      updateSubmitEnabled();
-    }
-  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

@@ -591,12 +591,18 @@
         <label class="ac-edit-field"><span>Nombre</span>
           <input x-model="userEditor.name" placeholder="Nombre" />
         </label>
-        <label class="ac-edit-field"><span>Rol</span>
-          <select x-model="userEditor.role">
-            <option value="admin">Admin</option>
-            <option value="editor">Editor</option>
-          </select>
-        </label>
+        <div class="ac-edit-field"><span>Rol</span>
+          <div class="ac-dd" @click.outside="userRoleOpen = false">
+            <button type="button" class="ac-dd-btn" :class="{ open: userRoleOpen }" @click="userRoleOpen = !userRoleOpen">
+              <span x-text="userEditor.role === 'admin' ? 'Admin' : 'Editor'"></span>
+              <svg class="ac-dd-caret" width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M6 8 0 0h12z" fill="currentColor"/></svg>
+            </button>
+            <div class="ac-dd-list" x-show="userRoleOpen" x-cloak>
+              <div class="ac-dd-opt" @click="userEditor.role = 'admin'; userRoleOpen = false">Admin</div>
+              <div class="ac-dd-opt" @click="userEditor.role = 'editor'; userRoleOpen = false">Editor</div>
+            </div>
+          </div>
+        </div>
         <label class="ac-edit-field"><span x-text="userEditor.mode === 'create' ? 'Contraseña' : 'Nueva contraseña (vacío = no cambiar)'"></span>
           <input type="password" x-model="userEditor.password" placeholder="mínimo 8 caracteres" autocomplete="new-password" />
         </label>
@@ -607,6 +613,32 @@
       <footer class="ac-modal-foot">
         <button class="ac-btn-ghost" @click="userEditor.open = false">Cancelar</button>
         <button class="ac-btn-primary" @click="saveUser()" :disabled="userEditor.saving" x-text="userEditor.saving ? 'Guardando…' : 'Guardar'"></button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ========== CONFIRM PROPIO ========== -->
+  <div class="ac-modal-overlay" x-show="confirmBox.open" @click.self="confirmResolve(false)" x-cloak style="z-index:130">
+    <div class="ac-modal" style="max-width:400px">
+      <div class="ac-modal-body"><p x-text="confirmBox.message" style="margin:0;font-size:15px;line-height:1.55"></p></div>
+      <footer class="ac-modal-foot">
+        <button class="ac-btn-ghost" @click="confirmResolve(false)">Cancelar</button>
+        <button class="ac-btn-danger" @click="confirmResolve(true)">Confirmar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ========== PROMPT PROPIO ========== -->
+  <div class="ac-modal-overlay" x-show="promptBox.open" @click.self="promptResolve(false)" x-cloak style="z-index:130">
+    <div class="ac-modal" style="max-width:400px">
+      <div class="ac-modal-body">
+        <p x-text="promptBox.message" style="margin:0 0 4px;font-size:14px;line-height:1.5"></p>
+        <input :type="promptBox.type" x-model="promptBox.value" x-ref="promptInput"
+               @keydown.enter.prevent="promptResolve(true)" @keydown.escape.prevent="promptResolve(false)" />
+      </div>
+      <footer class="ac-modal-foot">
+        <button class="ac-btn-ghost" @click="promptResolve(false)">Cancelar</button>
+        <button class="ac-btn-primary" @click="promptResolve(true)">Aceptar</button>
       </footer>
     </div>
   </div>

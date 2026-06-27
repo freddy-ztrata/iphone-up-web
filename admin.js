@@ -29,6 +29,9 @@ function adminApp() {
     bulkPriceOpen: false,
     prodEditor: { open: false, product: null },
     userEditor: { open: false, mode: "create", id: null, email: "", name: "", role: "admin", password: "", is_active: true, saving: false },
+    userRoleOpen: false,
+    confirmBox: { open: false, message: "", _resolve: null },
+    promptBox: { open: false, message: "", value: "", type: "text", _resolve: null },
 
     nav: [
       { id: "dashboard", label: "Dashboard", icon: "◐" },
@@ -241,23 +244,9 @@ function adminApp() {
     },
 
     async openStockPopover(storage) {
-      const delta = prompt(
-        `Stock actual: ${storage.stock}\n\n¿Cuánto ajustar?\n(+5 para agregar, -2 para restar)\nMotivo después del / opcional: "+5 / ingreso nuevo lote"`
-      );
-      if (!delta) return;
-      const [deltaStr, ...noteParts] = delta.split("/");
-      const deltaNum = parseInt(deltaStr.trim(), 10);
-      if (isNaN(deltaNum)) return this.toast("Delta inválido", "error");
-      const note = noteParts.join("/").trim() || null;
-      try {
-        const updated = await this.api("POST", "/products/variants/" + storage.variant_id + "/stock", {
-          delta: deltaNum, reason: "manual", note,
-        });
-        storage.stock = updated.stock;
-        this.toast(`Stock ahora: ${updated.stock}`, "success");
-      } catch (err) {
-        this.toast(err.message, "error");
-      }
+      const val = await this.askPrompt(`Stock actual: ${storage.stock}. Ingresa el nuevo stock:`, { defaultValue: String(storage.stock), type: "number" });
+      if (val == null || val === "") return;
+      await this.setStockValue(storage, val);
     },
 
     openProductDetail(productId) {
@@ -341,7 +330,7 @@ function adminApp() {
     },
 
     async deleteVariant(model, st) {
-      if (!confirm(`¿Eliminar la variante ${st.s}?`)) return;
+      if (!(await this.askConfirm(`¿Eliminar la variante ${st.s}?`))) return;
       try {
         await this.api("DELETE", "/products/variants/" + st.variant_id);
         model.storages = model.storages.filter(x => x.variant_id !== st.variant_id);
@@ -359,7 +348,7 @@ function adminApp() {
     },
 
     async deleteModel(model) {
-      if (!confirm(`¿Eliminar el modelo "${model.name}" y todas sus variantes?`)) return;
+      if (!(await this.askConfirm(`¿Eliminar el modelo "${model.name}" y todas sus variantes?`))) return;
       const p = this.prodEditor.product;
       try {
         await this.api("DELETE", "/products/models/" + model.model_id);
@@ -370,7 +359,7 @@ function adminApp() {
 
     async deleteProduct() {
       const p = this.prodEditor.product;
-      if (!confirm(`¿Eliminar TODO el producto (línea ${p.line}) con sus modelos y variantes? No se puede deshacer.`)) return;
+      if (!(await this.askConfirm(`¿Eliminar TODO el producto (línea ${p.line}) con sus modelos y variantes? No se puede deshacer.`))) return;
       try {
         await this.api("DELETE", "/products/" + p.id);
         this.products = this.products.filter(x => x.id !== p.id);
@@ -430,7 +419,7 @@ function adminApp() {
     },
 
     async deleteModelImage(model, img) {
-      if (!confirm("¿Eliminar esta foto?")) return;
+      if (!(await this.askConfirm("¿Eliminar esta foto?"))) return;
       try {
         await this.api("DELETE", "/uploads/image/" + img.id);
         model.gallery = model.gallery.filter(g => g.id !== img.id);
@@ -522,7 +511,7 @@ function adminApp() {
     },
 
     async deleteCoupon(c) {
-      if (!confirm(`¿Eliminar cupón ${c.code}?`)) return;
+      if (!(await this.askConfirm(`¿Eliminar cupón ${c.code}?`))) return;
       try {
         await this.api("DELETE", "/coupons/" + c.id);
         this.coupons = this.coupons.filter(x => x.id !== c.id);
@@ -655,6 +644,28 @@ function adminApp() {
     },
     removeToast(id) {
       this.toasts = this.toasts.filter(t => t.id !== id);
+    },
+
+    // ----- Confirm / Prompt propios (sin popups nativos) -----
+    askConfirm(message) {
+      return new Promise(resolve => { this.confirmBox = { open: true, message, _resolve: resolve }; });
+    },
+    confirmResolve(val) {
+      const r = this.confirmBox._resolve;
+      this.confirmBox = { open: false, message: "", _resolve: null };
+      if (r) r(val);
+    },
+    askPrompt(message, opts = {}) {
+      return new Promise(resolve => {
+        this.promptBox = { open: true, message, value: opts.defaultValue || "", type: opts.type || "text", _resolve: resolve };
+        this.$nextTick(() => this.$refs.promptInput && this.$refs.promptInput.focus());
+      });
+    },
+    promptResolve(ok) {
+      const r = this.promptBox._resolve;
+      const val = ok ? this.promptBox.value : null;
+      this.promptBox = { open: false, message: "", value: "", type: "text", _resolve: null };
+      if (r) r(val);
     },
 
     // ----- Utils -----
