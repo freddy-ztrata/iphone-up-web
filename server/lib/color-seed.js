@@ -5,7 +5,7 @@
 //
 // Idempotente: si ya existe alguna variante con color, no hace nada.
 
-const db = require("./db");
+const db = require("../db");
 
 const COLORMAP = {
   "11_base": ["Negro", "Blanco", "Rojo", "Amarillo", "Verde", "Morado"],
