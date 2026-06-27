@@ -31,7 +31,7 @@ const mercadopagoRouter = require("./routes/mercadopago");
 const chilexpressRouter = require("./routes/chilexpress");
 const ordersRouter = require("./routes/orders");
 const adminRouter = require("./routes/admin");
-const { buildDataJs } = require("./lib/catalog");
+const { buildDataJs, buildPublicCatalog } = require("./lib/catalog");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -207,6 +207,34 @@ app.use("/uploads", express.static(path.join(db.DATA_DIR, "uploads"), {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   },
 }));
+
+// ---------- URLs limpias de producto + sitemap dinámico ----------
+// /producto/<fullSlug> sirve product.html; product.js resuelve el modelo por su fullSlug.
+// La analítica registra el pathname → cada producto aparece distinto en "páginas más vistas".
+app.get("/producto/:slug", (_req, res) => res.sendFile(path.join(ROOT, "product.html")));
+
+// Sitemap generado desde el catálogo (1 URL por modelo). Se actualiza solo al activar productos.
+app.get("/sitemap.xml", (_req, res) => {
+  try {
+    const base = PUBLIC_URL.replace(/\/$/, "");
+    const today = new Date().toISOString().slice(0, 10);
+    const locs = [`${base}/`];
+    for (const e of buildPublicCatalog()) {
+      if (e.hidden) continue;
+      locs.push(`${base}/producto/${e.fullSlug}`);
+    }
+    const body = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      locs.map(u => `  <url><loc>${u}</loc><lastmod>${today}</lastmod></url>`).join("\n") +
+      `\n</urlset>\n`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(body);
+  } catch (err) {
+    console.error("[/sitemap.xml] error:", err.message);
+    res.sendFile(path.join(ROOT, "sitemap.xml"));
+  }
+});
 
 // ---------- Static site ----------
 app.use(

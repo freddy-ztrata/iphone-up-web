@@ -82,7 +82,7 @@ function renderPhoneCard(phone) {
   // glow blob
   inner.appendChild(el("div", { class: "phone-card-glow" }));
 
-  const href = `product.html?id=${phone.id}&model=${phone.slug}&s=${cs.storageIdx}`;
+  const href = `/producto/${phone.fullSlug}`;
 
   // image (with Sellado badge if applicable) — clickable
   const imgWrap = el("a", { class: "phone-img", href, "aria-label": `Ver detalle de ${phone.name}` });
@@ -125,7 +125,7 @@ function renderPhoneCard(phone) {
   const ctaRow = el("div", { class: "card-cta-row" });
   const detailLink = el("a", {
     class: "btn-detail",
-    href: `product.html?id=${phone.id}&model=${phone.slug}&cap=${encodeURIComponent(capSel || "")}`,
+    href: `/producto/${phone.fullSlug}?cap=${encodeURIComponent(capSel || "")}`,
   }, "Ver detalle →");
   const addBtn = el("button", {
     class: "btn-add",

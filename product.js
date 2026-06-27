@@ -25,7 +25,9 @@ const el = (tag, attrs={}, children=[]) => {
 
 function parseQuery() {
   const p = new URLSearchParams(window.location.search);
+  const routeMatch = window.location.pathname.match(/^\/producto\/([^\/?#]+)/);
   return {
+    cleanSlug: routeMatch ? decodeURIComponent(routeMatch[1]) : "",
     id: parseInt(p.get("id"), 10),
     model: p.get("model") || "",
     m: Math.max(0, parseInt(p.get("m"), 10) || 0),
@@ -43,13 +45,18 @@ const state = {
 
 function init() {
   const q = parseQuery();
-  // CATALOG es plano: 1 entrada por modelo. Varias comparten id (la línea).
-  const matches = CATALOG.filter(p => p.id === q.id);
+  // CATALOG es plano: 1 entrada por modelo.
   let phone = null;
-  if (matches.length) {
-    if (q.model) phone = matches.find(e => e.slug === q.model) || null;
-    if (!phone && q.hasM) phone = matches[Math.min(q.m, matches.length - 1)]; // compat ?m=
-    if (!phone) phone = matches[0];
+  // 1) URL limpia /producto/<fullSlug>
+  if (q.cleanSlug) phone = CATALOG.find(e => e.fullSlug === q.cleanSlug) || null;
+  // 2) Compat: product.html?id=<línea>&model=<slug> (o ?m=<idx>). Varias entradas comparten id.
+  if (!phone && !Number.isNaN(q.id)) {
+    const matches = CATALOG.filter(p => p.id === q.id);
+    if (matches.length) {
+      if (q.model) phone = matches.find(e => e.slug === q.model) || null;
+      if (!phone && q.hasM) phone = matches[Math.min(q.m, matches.length - 1)];
+      if (!phone) phone = matches[0];
+    }
   }
   if (!phone) {
     $("#product-root").style.display = "none";
@@ -61,6 +68,14 @@ function init() {
   state.phone = phone;
   state.capSel = q.cap;
   state.colorSel = q.col;
+
+  // Normaliza links viejos (product.html?id=...) a la URL limpia /producto/<fullSlug>.
+  if (!q.cleanSlug && phone.fullSlug) {
+    const clean = new URL(window.location.href);
+    clean.pathname = `/producto/${phone.fullSlug}`;
+    ["id", "model", "m", "s"].forEach(k => clean.searchParams.delete(k));
+    window.history.replaceState({}, "", clean.toString());
+  }
 
   renderAll();
   bindGlobalUI();
@@ -225,7 +240,7 @@ function updateMeta(phone, model, storage) {
   const vLabel = `${storage.s}${storage.color ? " " + storage.color : ""}`;
   const title = `${model.name} ${vLabel} ${condShort} | iPhone UP`;
   const desc = `${model.name} ${vLabel} ${condLong}, 100% original con garantía de 6 meses. Desde ${fmtCLP(storage.p)}. Tienda física en Providencia, Santiago.`;
-  const canonical = `https://iphoneup.cl/product.html?id=${phone.id}&model=${phone.slug}`;
+  const canonical = `https://iphoneup.cl/producto/${phone.fullSlug}`;
   const img = "https://iphoneup.cl/" + (model.img || phone.lineImg);
 
   document.title = title;
@@ -261,7 +276,7 @@ function updateProductSchema(phone, model, storage) {
       priceCurrency: "CLP",
       itemCondition: condition,
       availability: "https://schema.org/InStock",
-      url: `https://iphoneup.cl/product.html?id=${phone.id}&model=${phone.slug}`,
+      url: `https://iphoneup.cl/producto/${phone.fullSlug}`,
       seller: { "@type": "Organization", name: "iPhone UP" },
     },
   };
@@ -322,7 +337,7 @@ function renderRelated() {
     .slice(0, 3);
   others.forEach(p => {
     const minPrice = Math.min(...(p.storages || []).map(s => s.p));
-    const card = el("a", { class: "related-card", href: `product.html?id=${p.id}&model=${p.slug}` }, [
+    const card = el("a", { class: "related-card", href: `/producto/${p.fullSlug}` }, [
       el("div", { class: "related-img" }, [
         el("img", { src: p.img || p.lineImg, alt: p.name, loading: "lazy" }),
       ]),
@@ -335,12 +350,10 @@ function renderRelated() {
 
 function pushUrl() {
   const url = new URL(window.location.href);
-  url.searchParams.set("id", state.phone.id);
-  url.searchParams.set("model", state.phone.slug);
-  url.searchParams.delete("m");
+  url.pathname = `/producto/${state.phone.fullSlug}`;
+  ["id", "model", "m", "s"].forEach(k => url.searchParams.delete(k));
   if (state.capSel) url.searchParams.set("cap", state.capSel); else url.searchParams.delete("cap");
   if (state.colorSel) url.searchParams.set("col", state.colorSel); else url.searchParams.delete("col");
-  url.searchParams.delete("s");
   window.history.replaceState({}, "", url.toString());
 }
 

@@ -116,6 +116,12 @@ function slugify(name, line) {
   return s || "base";
 }
 
+// Slug GLOBAL url-safe del nombre completo del modelo, para la URL limpia
+// /producto/<slug>:  "iPhone 11 Pro Max" -> "iphone-11-pro-max"; "iPhone 15" -> "iphone-15".
+function fullSlugify(name) {
+  return String(name || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "producto";
+}
+
 /**
  * Catálogo PÚBLICO aplanado: cada MODELO es un producto independiente
  * (iPhone 11, iPhone 11 Pro, iPhone 11 Pro Max → 3 entradas separadas).
@@ -129,6 +135,7 @@ function slugify(name, line) {
 function buildPublicCatalog() {
   const nested = buildCatalog({ includeHidden: true });
   const flat = [];
+  const fullSlugSeen = new Set(); // unicidad GLOBAL del slug de URL
   for (const p of nested) {
     const models = Array.isArray(p.models) ? p.models : [];
     const slugSeen = new Set();
@@ -142,6 +149,13 @@ function buildPublicCatalog() {
         slug = `${slug}-${i}`;
       }
       slugSeen.add(slug);
+      let fullSlug = fullSlugify(m.name);
+      if (fullSlugSeen.has(fullSlug)) {
+        let i = 2;
+        while (fullSlugSeen.has(`${fullSlug}-${i}`)) i++;
+        fullSlug = `${fullSlug}-${i}`;
+      }
+      fullSlugSeen.add(fullSlug);
       const entry = {
         id: p.id,
         line: p.line,
@@ -149,6 +163,7 @@ function buildPublicCatalog() {
         lineImg: p.img,
         name: m.name,
         slug,
+        fullSlug,
         img: m.img || p.img,
         sealed: !!m.sealed,
         storages,
