@@ -29,6 +29,7 @@ const GET = db.prepare("SELECT * FROM orders WHERE id = ?");
 const UPDATE_STATUS = db.prepare(`
   UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?
 `);
+const DELETE_ORDER = db.prepare("DELETE FROM orders WHERE id = ?");
 
 router.get("/", (req, res) => {
   const orders = LIST(req.query).map(o => ({
@@ -63,6 +64,17 @@ router.patch("/:id", (req, res) => {
     before: { status: before.status }, after: { status: after.status },
   });
   res.json(after);
+});
+
+router.delete("/:id", (req, res) => {
+  const before = GET.get(req.params.id);
+  if (!before) return res.status(404).json({ error: "No existe" });
+  DELETE_ORDER.run(req.params.id);
+  audit.log(req, {
+    action: "delete", entity_type: "order", entity_id: req.params.id,
+    before: { status: before.status, total: before.total },
+  });
+  res.json({ ok: true });
 });
 
 module.exports = router;

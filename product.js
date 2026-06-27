@@ -27,14 +27,16 @@ function parseQuery() {
   return {
     id: parseInt(p.get("id"), 10),
     m: Math.max(0, parseInt(p.get("m"), 10) || 0),
-    s: Math.max(0, parseInt(p.get("s"), 10) || 0),
+    cap: p.get("cap") || "",
+    col: p.get("col") || "",
   };
 }
 
 const state = {
   phone: null,
   modelIdx: 0,
-  storageIdx: 0,
+  capSel: "",
+  colorSel: "",
 };
 
 function init() {
@@ -49,7 +51,8 @@ function init() {
   }
   state.phone = phone;
   state.modelIdx = Math.min(q.m, phone.models.length - 1);
-  state.storageIdx = q.s; // será clipeada al storage del modelo en render
+  state.capSel = q.cap;
+  state.colorSel = q.col;
 
   renderAll();
   bindGlobalUI();
@@ -60,16 +63,36 @@ function init() {
 function currentModel() {
   return state.phone.models[state.modelIdx];
 }
-function currentStorage() {
-  const m = currentModel();
-  state.storageIdx = Math.min(state.storageIdx, m.storages.length - 1);
-  return m.storages[state.storageIdx];
+// Variantes = capacidad × color. Helpers para el selector 2D.
+function modelCaps(model) {
+  const out = [];
+  (model.storages || []).forEach(v => { if (!out.includes(v.s)) out.push(v.s); });
+  return out;
+}
+function capColors(model, cap) {
+  const out = [];
+  (model.storages || []).forEach(v => { if (v.s === cap) { const c = v.color || ""; if (!out.includes(c)) out.push(c); } });
+  return out;
+}
+function findVariant(model, cap, color) {
+  return (model.storages || []).find(v => v.s === cap && (v.color || "") === (color || "")) || null;
+}
+function ensureSelection() {
+  const model = currentModel();
+  const caps = modelCaps(model);
+  if (!caps.includes(state.capSel)) state.capSel = caps[0] || "";
+  const colors = capColors(model, state.capSel);
+  if (!colors.includes(state.colorSel)) state.colorSel = colors[0] || "";
+}
+function currentVariant() {
+  ensureSelection();
+  return findVariant(currentModel(), state.capSel, state.colorSel) || (currentModel().storages || [])[0] || { s: "", p: 0 };
 }
 
 function renderAll() {
   const phone = state.phone;
   const model = currentModel();
-  const storage = currentStorage();
+  const variant = currentVariant();
 
   $("#bc-current").textContent = model.name;
   $("#product-line-label").textContent = `· iPhone ${phone.line} · ${phone.year}`;
@@ -95,7 +118,7 @@ function renderAll() {
     const label = m.name.replace(`iPhone ${phone.line}`, "").trim() || "Base";
     const btn = el("button", {
       class: "variant-pill" + (i === state.modelIdx ? " active" : ""),
-      onclick: () => { state.modelIdx = i; state.storageIdx = 0; pushUrl(); renderAll(); },
+      onclick: () => { state.modelIdx = i; state.capSel = ""; state.colorSel = ""; pushUrl(); renderAll(); },
     }, label);
     vWrap.appendChild(btn);
   });
@@ -103,36 +126,55 @@ function renderAll() {
   vWrap.style.display = phone.models.length > 1 ? "flex" : "none";
   vWrap.previousElementSibling.style.display = phone.models.length > 1 ? "block" : "none";
 
-  // Storages
+  // Capacidades (distinct entre variantes activas)
   const sWrap = $("#product-storages");
   sWrap.innerHTML = "";
-  model.storages.forEach((v, i) => {
+  const caps = modelCaps(model);
+  caps.forEach(cap => {
+    const minP = Math.min(...model.storages.filter(v => v.s === cap).map(v => v.p));
     const btn = el("button", {
-      class: "storage-pill big" + (i === state.storageIdx ? " active" : ""),
-      onclick: () => { state.storageIdx = i; pushUrl(); renderAll(); },
+      class: "storage-pill big" + (cap === state.capSel ? " active" : ""),
+      onclick: () => { state.capSel = cap; state.colorSel = ""; ensureSelection(); pushUrl(); renderAll(); },
     }, [
-      el("span", { class: "sp-cap" }, v.s),
-      el("span", { class: "sp-price" }, fmtCLP(v.p)),
+      el("span", { class: "sp-cap" }, cap),
+      el("span", { class: "sp-price" }, fmtCLP(minP)),
     ]);
     sWrap.appendChild(btn);
   });
 
+  // Colores disponibles para la capacidad elegida
+  const cWrap = $("#product-colors");
+  if (cWrap) {
+    cWrap.innerHTML = "";
+    const colors = capColors(model, state.capSel);
+    const showColors = colors.length > 0 && !(colors.length === 1 && colors[0] === "");
+    colors.forEach(color => {
+      const btn = el("button", {
+        class: "color-pill" + (color === state.colorSel ? " active" : ""),
+        onclick: () => { state.colorSel = color; pushUrl(); renderAll(); },
+      }, color || "Único");
+      cWrap.appendChild(btn);
+    });
+    cWrap.style.display = showColors ? "flex" : "none";
+    if (cWrap.previousElementSibling) cWrap.previousElementSibling.style.display = showColors ? "block" : "none";
+  }
+
   // Pricing
-  $("#product-price").textContent = fmtCLP(storage.p);
+  $("#product-price").textContent = fmtCLP(variant.p);
 
   // Description / tagline from specs
   const specs = window.getSpecsFor(phone.id, model.name) || {};
   $("#product-tagline").textContent = specs.tagline || "";
 
   // SEO: meta + structured data por producto
-  updateMeta(phone, model, storage);
-  updateProductSchema(phone, model, storage);
+  updateMeta(phone, model, variant);
+  updateProductSchema(phone, model, variant);
 
   // Add-to-cart binding
   const addBtn = $("#product-add");
   addBtn.onclick = () => {
     window.cartStore.add({
-      model: model.name, storage: storage.s, price: storage.p,
+      model: model.name, storage: variant.s, color: variant.color || "", price: variant.p,
       sealed: model.sealed, phoneId: phone.id, img: model.img || phone.img,
     });
     updateCartBadge();
@@ -179,8 +221,9 @@ function setMetaAttr(id, attr, val) {
 function updateMeta(phone, model, storage) {
   const condShort = model.sealed ? "sellado" : "seminuevo";
   const condLong = model.sealed ? "sellado en caja" : "seminuevo A+";
-  const title = `${model.name} ${storage.s} ${condShort} | iPhone UP`;
-  const desc = `${model.name} ${storage.s} ${condLong}, 100% original con garantía de 6 meses. Desde ${fmtCLP(storage.p)}. Tienda física en Providencia, Santiago.`;
+  const vLabel = `${storage.s}${storage.color ? " " + storage.color : ""}`;
+  const title = `${model.name} ${vLabel} ${condShort} | iPhone UP`;
+  const desc = `${model.name} ${vLabel} ${condLong}, 100% original con garantía de 6 meses. Desde ${fmtCLP(storage.p)}. Tienda física en Providencia, Santiago.`;
   const canonical = `https://iphoneup.cl/product.html?id=${phone.id}`;
   const img = "https://iphoneup.cl/" + (model.img || phone.img);
 
@@ -201,12 +244,13 @@ function updateProductSchema(phone, model, storage) {
     ? "https://schema.org/NewCondition"
     : "https://schema.org/RefurbishedCondition";
   const img = "https://iphoneup.cl/" + (model.img || phone.img);
+  const vLabel = `${storage.s}${storage.color ? " " + storage.color : ""}`;
   const product = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: `${model.name} ${storage.s}`,
+    name: `${model.name} ${vLabel}`,
     image: img,
-    description: `${model.name} ${storage.s} ${model.sealed ? "sellado en caja" : "seminuevo A+"}, 100% original con garantía de 6 meses.`,
+    description: `${model.name} ${vLabel} ${model.sealed ? "sellado en caja" : "seminuevo A+"}, 100% original con garantía de 6 meses.`,
     brand: { "@type": "Brand", name: "Apple" },
     category: "Smartphones",
     itemCondition: condition,
@@ -216,7 +260,7 @@ function updateProductSchema(phone, model, storage) {
       priceCurrency: "CLP",
       itemCondition: condition,
       availability: "https://schema.org/InStock",
-      url: `https://iphoneup.cl/product.html?id=${phone.id}&m=${state.modelIdx}&s=${state.storageIdx}`,
+      url: `https://iphoneup.cl/product.html?id=${phone.id}&m=${state.modelIdx}`,
       seller: { "@type": "Organization", name: "iPhone UP" },
     },
   };
@@ -290,7 +334,9 @@ function pushUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set("id", state.phone.id);
   url.searchParams.set("m", state.modelIdx);
-  url.searchParams.set("s", state.storageIdx);
+  if (state.capSel) url.searchParams.set("cap", state.capSel); else url.searchParams.delete("cap");
+  if (state.colorSel) url.searchParams.set("col", state.colorSel); else url.searchParams.delete("col");
+  url.searchParams.delete("s");
   window.history.replaceState({}, "", url.toString());
 }
 
@@ -320,7 +366,7 @@ function renderCart() {
   items.forEach((v, i) => {
     const item = el("div", { class: "cart-item" }, [
       el("div", { class: "cart-item-name" }, v.model),
-      el("div", { class: "cart-item-meta" }, `${v.storage} · ${v.sealed ? "Sellado" : "Seminuevo"}`),
+      el("div", { class: "cart-item-meta" }, `${v.storage}${v.color ? " · " + v.color : ""} · ${v.sealed ? "Sellado" : "Seminuevo"}`),
       el("div", { class: "cart-item-row" }, [
         el("span", { class: "cart-item-price" }, fmtCLP(v.price)),
         el("button", {

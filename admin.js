@@ -586,8 +586,20 @@ function adminApp() {
           <div style="display:flex;justify-content:space-between;padding:8px 0;color:var(--text-dim)"><span>Envío</span><span class="ac-mono">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? 'Retiro en tienda' : (Number(o.shipping_cost) > 0 ? this.fmtCLP(o.shipping_cost) : 'Por pagar')}</span></div>
           <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:800;font-size:18px;color:var(--accent)"><span>Total</span><span class="ac-mono">${this.fmtCLP(o.total)}</span></div>
           ${o.buyer?.phone ? `<a href="https://wa.me/${o.buyer.phone.replace(/[^0-9]/g, '')}" target="_blank" class="ac-btn-ghost" style="display:block;text-align:center;margin-top:18px;text-decoration:none">Contactar por WhatsApp</a>` : ""}
+          <button class="ac-btn-danger" style="width:100%;margin-top:10px" onclick="window.__admin.deleteOrder('${o.id}')">Eliminar orden</button>
         `;
+        window.__admin = this;
         this.drawer.open = true;
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async deleteOrder(id) {
+      if (!(await this.askConfirm("¿Eliminar esta orden? No se puede deshacer."))) return;
+      try {
+        await this.api("DELETE", "/orders/" + id);
+        this.drawer.open = false;
+        this.toast("Orden eliminada", "success");
+        this.loadOrders();
       } catch (err) { this.toast(err.message, "error"); }
     },
 

@@ -54,7 +54,7 @@ router.post("/preference", async (req, res) => {
   // Items normalizados para MP.
   const mpItems = items.map((it, idx) => ({
     id: `iphone-${it.phoneId || idx}-${(it.storage || "").replace(/\s+/g, "")}`,
-    title: `${it.model}${it.storage ? " " + it.storage : ""}`.slice(0, 250),
+    title: `${it.model}${it.storage ? " " + it.storage : ""}${it.color ? " " + it.color : ""}`.slice(0, 250),
     description: it.sealed ? "Sellado · iPhone UP" : "Seminuevo A+ · iPhone UP",
     quantity: Number(it.qty || 1),
     currency_id: "CLP",
@@ -164,10 +164,41 @@ router.post("/webhook", async (req, res) => {
       console.warn("[mp webhook] pago sin external_reference:", id);
       return;
     }
-    const order = getOrder(externalRef);
+    let order = getOrder(externalRef);
     if (!order) {
-      console.warn("[mp webhook] orden no encontrada:", externalRef);
-      return;
+      // No hay orden local para este pago (perdida o pago fuera del checkout web).
+      // La creamos desde los datos de Mercado Pago para NO perder la venta.
+      try {
+        const payer = payment.payer || {};
+        saveOrder({
+          id: externalRef,
+          status: payment.status,
+          subtotal: Math.round(payment.transaction_amount || 0),
+          total: Math.round(payment.transaction_amount || 0),
+          buyer: {
+            name: [payer.first_name, payer.last_name].filter(Boolean).join(" "),
+            email: payer.email || "",
+            phone: (payer.phone && payer.phone.number) || "",
+          },
+          items: [],
+          shipping: {},
+          payment: {
+            paymentId: String(payment.id),
+            status: payment.status,
+            statusDetail: payment.status_detail,
+            paymentMethod: payment.payment_method_id,
+            transactionAmount: payment.transaction_amount,
+            approvedAt: payment.date_approved,
+          },
+          mp: { paymentId: String(payment.id) },
+          createdAt: payment.date_created || payment.date_approved || undefined,
+        });
+        order = getOrder(externalRef);
+        console.warn("[mp webhook] orden no existía; creada desde el pago MP:", externalRef);
+      } catch (e) {
+        console.error("[mp webhook] no se pudo crear orden desde el pago:", e.message);
+        return;
+      }
     }
     const wasApprovedBefore = order.status === "approved";
     updateOrderStatus(externalRef, payment.status, {

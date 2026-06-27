@@ -67,8 +67,21 @@ function getCardState(phoneId) {
 function renderPhoneCard(phone) {
   const cs = getCardState(phone.id);
   const models = phone.models;
-  const model = models[Math.min(cs.modelIdx, models.length - 1)] || phone.models[0];
-  const storage = model.storages[Math.min(cs.storageIdx, model.storages.length - 1)] || model.storages[0];
+  let model = models[Math.min(cs.modelIdx, models.length - 1)] || phone.models[0];
+  // Si el modelo elegido no tiene variantes activas, usar el primero que sí tenga.
+  if (!model.storages || !model.storages.length) {
+    const idx = models.findIndex(m => m.storages && m.storages.length);
+    if (idx >= 0) { cs.modelIdx = idx; model = models[idx]; }
+  }
+  // Capacidades distintas (las variantes ahora son capacidad × color).
+  const caps = [];
+  (model.storages || []).forEach(v => { if (!caps.includes(v.s)) caps.push(v.s); });
+  cs.storageIdx = Math.min(cs.storageIdx, Math.max(0, caps.length - 1));
+  const capSel = caps[cs.storageIdx];
+  // Variante más barata de esa capacidad (precio "desde").
+  const storage = (model.storages || [])
+    .filter(v => v.s === capSel)
+    .sort((a, b) => a.p - b.p)[0] || (model.storages || [])[0] || { s: "", p: 0 };
 
   const wrap = el("article", { class: "phone-card" });
   const inner = el("div", { class: "phone-card-inner" });
@@ -109,13 +122,13 @@ function renderPhoneCard(phone) {
     inner.appendChild(ms);
   }
 
-  // storage selector
+  // storage selector (capacidades distintas)
   const ss = el("div", { class: "storage-selector" });
-  model.storages.forEach((v, i) => {
+  caps.forEach((cap, i) => {
     const btn = el("button", {
       class: "storage-pill" + (i === cs.storageIdx ? " active" : ""),
       onclick: () => { cs.storageIdx = i; renderCatalog(); },
-    }, v.s);
+    }, cap);
     ss.appendChild(btn);
   });
   inner.appendChild(ss);
@@ -132,11 +145,11 @@ function renderPhoneCard(phone) {
   const ctaRow = el("div", { class: "card-cta-row" });
   const detailLink = el("a", {
     class: "btn-detail",
-    href: `product.html?id=${phone.id}&m=${cs.modelIdx}&s=${cs.storageIdx}`,
+    href: `product.html?id=${phone.id}&m=${cs.modelIdx}&cap=${encodeURIComponent(capSel || "")}`,
   }, "Ver detalle →");
   const addBtn = el("button", {
     class: "btn-add",
-    onclick: () => addToCart({ model: model.name, storage: storage.s, price: storage.p, sealed: model.sealed, phoneId: phone.id, img: model.img || phone.img }),
+    onclick: () => addToCart({ model: model.name, storage: storage.s, color: storage.color || "", price: storage.p, sealed: model.sealed, phoneId: phone.id, img: model.img || phone.img }),
   }, "Agregar");
   ctaRow.appendChild(detailLink);
   ctaRow.appendChild(addBtn);
@@ -181,7 +194,7 @@ function renderCart() {
   state.cart.forEach((v, i) => {
     const item = el("div", { class: "cart-item" }, [
       el("div", { class: "cart-item-name" }, v.model),
-      el("div", { class: "cart-item-meta" }, `${v.storage} · ${v.sealed ? "Sellado" : "Seminuevo"}`),
+      el("div", { class: "cart-item-meta" }, `${v.storage}${v.color ? " · " + v.color : ""} · ${v.sealed ? "Sellado" : "Seminuevo"}`),
       el("div", { class: "cart-item-row" }, [
         el("span", { class: "cart-item-price" }, fmtCLP(v.price)),
         el("button", { class: "cart-item-remove", onclick: () => removeFromCart(i), "aria-label": "Quitar" }, "✕"),
