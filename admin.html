@@ -535,46 +535,46 @@
   <!-- ========== EDITOR DE PRODUCTO ========== -->
   <div class="ac-drawer-overlay" x-show="prodEditor.open" @click="prodEditor.open = false" x-cloak></div>
   <aside class="ac-drawer ac-drawer-wide" :class="{ open: prodEditor.open }">
-    <template x-if="prodEditor.product">
+    <template x-if="prodEditor.draft">
       <div style="display:flex;flex-direction:column;height:100%">
         <header class="ac-drawer-head">
-          <h2>Editar — iPhone <span x-text="prodEditor.product.line"></span></h2>
+          <h2>Editar — iPhone <span x-text="prodEditor.draft.line"></span></h2>
           <button class="ac-icon-btn" @click="prodEditor.open = false">✕</button>
         </header>
         <div class="ac-edit-body">
           <div class="ac-edit-grid">
             <label class="ac-edit-field"><span>Línea</span>
-              <input x-model="prodEditor.product.line" @change="saveProduct('line', prodEditor.product.line)" />
+              <input x-model="prodEditor.draft.line" />
             </label>
             <label class="ac-edit-field"><span>Año</span>
-              <input type="number" x-model.number="prodEditor.product.year" @change="saveProduct('year', prodEditor.product.year)" />
+              <input type="number" x-model.number="prodEditor.draft.year" />
             </label>
             <div class="ac-edit-field" style="grid-column:1/-1">
               <span>Imagen principal de la línea</span>
               <div class="ac-hero-edit">
-                <img class="ac-hero-preview" :src="prodEditor.product.img || ''" alt="" x-show="prodEditor.product.img" />
-                <input x-model="prodEditor.product.img" @change="saveProduct('hero_img', prodEditor.product.img)" placeholder="ruta o sube una foto →" />
+                <img class="ac-hero-preview" :src="prodEditor.draft.img || ''" alt="" x-show="prodEditor.draft.img" />
+                <input x-model="prodEditor.draft.img" placeholder="ruta o sube una foto →" />
                 <label class="ac-btn-ghost ac-btn-sm ac-upload-btn">
-                  <input type="file" accept="image/*" @change="uploadProductHero(prodEditor.product, $event.target.files); $event.target.value=''" hidden />
+                  <input type="file" accept="image/*" @change="uploadProductHero(prodEditor.draft, $event.target.files); $event.target.value=''" hidden />
                   ⬆ Subir
                 </label>
               </div>
             </div>
             <label class="ac-edit-checkbox" style="grid-column:1/-1">
-              <input type="checkbox" :checked="!prodEditor.product.hidden" @change="toggleProductHidden(prodEditor.product, $event.target.checked)" />
-              <span>Visible en la web</span>
+              <input type="checkbox" x-model="prodEditor.draft.hidden" />
+              <span>Oculto en la web</span>
             </label>
           </div>
 
           <div class="ac-edit-section-title">Modelos y variantes</div>
-          <template x-for="model in prodEditor.product.models" :key="model.model_id">
+          <template x-for="(model, mi) in prodEditor.draft.models" :key="model.model_id ?? ('new-' + mi)">
             <div class="ac-edit-model">
               <div class="ac-edit-model-head">
-                <input x-model="model.name" @change="saveModel(model, 'name', model.name)" placeholder="Nombre del modelo" />
-                <label class="ac-edit-checkbox"><input type="checkbox" x-model="model.sealed" @change="saveModel(model, 'sealed', model.sealed)" /><span>Sellado</span></label>
-                <button class="ac-icon-btn" @click="deleteModel(model)" title="Eliminar modelo">🗑</button>
+                <input x-model="model.name" placeholder="Nombre del modelo" />
+                <label class="ac-edit-checkbox"><input type="checkbox" x-model="model.sealed" /><span>Sellado</span></label>
+                <button class="ac-icon-btn" @click="removeModelDraft(model)" title="Eliminar modelo">🗑</button>
               </div>
-              <div class="ac-edit-field">
+              <div class="ac-edit-field" x-show="model.model_id">
                 <span>Fotos del modelo</span>
                 <div class="ac-media">
                   <div class="ac-media-current" x-show="model.img">
@@ -603,28 +603,33 @@
                   </div>
                 </div>
               </div>
+              <p class="ac-edit-hint" x-show="!model.model_id">Guarda el producto para poder subir fotos a este modelo nuevo.</p>
               <table class="ac-edit-variants">
                 <thead><tr><th>Capacidad</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
                 <tbody>
-                  <template x-for="st in model.storages" :key="st.variant_id">
+                  <template x-for="(st, si) in model.storages" :key="st.variant_id ?? ('newv-' + si)">
                     <tr>
-                      <td><input x-model="st.s" @change="saveVariant(st, 'storage', st.s)" /></td>
-                      <td><input type="number" class="ac-mono" x-model.number="st.p" @change="saveVariant(st, 'price', st.p)" /></td>
-                      <td><input type="number" class="ac-mono" :value="st.stock" @change="setStockValue(st, $event.target.value)" /></td>
-                      <td><button class="ac-icon-btn" @click="deleteVariant(model, st)" title="Eliminar variante">🗑</button></td>
+                      <td><input x-model="st.s" /></td>
+                      <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
+                      <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
+                      <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar variante">🗑</button></td>
                     </tr>
                   </template>
                 </tbody>
               </table>
-              <button class="ac-btn-ghost ac-btn-sm" @click="addVariant(model)">+ Variante</button>
+              <button class="ac-btn-ghost ac-btn-sm" @click="addVariantDraft(model)">+ Variante</button>
             </div>
           </template>
-          <button class="ac-btn-ghost" @click="addModel()">+ Agregar modelo</button>
+          <button class="ac-btn-ghost" @click="addModelDraft()">+ Agregar modelo</button>
 
           <div class="ac-edit-danger">
             <button class="ac-btn-danger" @click="deleteProduct()">Eliminar producto completo</button>
           </div>
         </div>
+        <footer class="ac-edit-foot">
+          <button class="ac-btn-ghost" @click="prodEditor.open = false">Descartar</button>
+          <button class="ac-btn-primary" @click="saveProductDraft()" :disabled="prodEditor.saving" x-text="prodEditor.saving ? 'Guardando…' : 'Guardar cambios'"></button>
+        </footer>
       </div>
     </template>
   </aside>

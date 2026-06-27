@@ -28,7 +28,7 @@ function adminApp() {
     palette: { open: false, query: "", results: [], idx: 0 },
     toasts: [],
     bulkPriceOpen: false,
-    prodEditor: { open: false, product: null },
+    prodEditor: { open: false, draft: null, original: null, saving: false },
     userEditor: { open: false, mode: "create", id: null, email: "", name: "", role: "admin", password: "", is_active: true, saving: false },
     userRoleOpen: false,
     confirmBox: { open: false, message: "", _resolve: null },
@@ -287,7 +287,7 @@ function adminApp() {
       this.drawer.open = true;
     },
 
-    // ----- Productos: crear + editor robusto -----
+    // ----- Productos: crear + editor con GUARDADO EXPLÍCITO (estilo Shopify) -----
     async newProduct() {
       const maxLine = Math.max(0, ...this.products.map(p => parseInt(p.line, 10) || 0));
       try {
@@ -295,46 +295,38 @@ function adminApp() {
         if (!Array.isArray(created.models)) created.models = [];
         this.products.unshift(created);
         this.openProductEditor(created.id);
-        this.toast("Producto creado — agrega modelos y variantes", "success");
+        this.toast("Producto creado — agrega modelos/variantes y dale Guardar", "success");
       } catch (err) { this.toast(err.message, "error"); }
     },
 
+    // Abre el editor con una COPIA (borrador). Nada se guarda hasta "Guardar cambios".
     openProductEditor(productId) {
       const p = this.products.find(x => x.id === productId);
       if (!p) return;
-      if (!Array.isArray(p.models)) p.models = [];
-      this.prodEditor.product = p;
+      const clone = JSON.parse(JSON.stringify(p));
+      if (!Array.isArray(clone.models)) clone.models = [];
+      this.prodEditor.original = JSON.parse(JSON.stringify(clone));
+      this.prodEditor.draft = clone;
+      this.prodEditor.saving = false;
       this.prodEditor.open = true;
     },
 
-    async saveProduct(field, value) {
-      const p = this.prodEditor.product;
-      if (!p) return;
-      try {
-        await this.api("PATCH", "/products/" + p.id, { [field]: value });
-        this.toast("Producto guardado", "success");
-      } catch (err) { this.toast(err.message, "error"); }
+    // --- Mutaciones SOLO en el borrador (no tocan el servidor hasta Guardar) ---
+    addVariantDraft(model) {
+      const last = model.storages[model.storages.length - 1];
+      model.storages.push({ s: "128GB", p: last ? last.p : 0, stock: 0, variant_id: null });
+    },
+    removeVariantDraft(model, st) {
+      model.storages = model.storages.filter(x => x !== st);
+    },
+    addModelDraft() {
+      this.prodEditor.draft.models.push({ model_id: null, name: "Nuevo modelo", img: this.prodEditor.draft.img || "", sealed: false, storages: [], gallery: [] });
+    },
+    removeModelDraft(model) {
+      this.prodEditor.draft.models = this.prodEditor.draft.models.filter(m => m !== model);
     },
 
-    toggleProductHidden(p, visible) {
-      p.hidden = !visible;
-      this.saveProduct("hidden", p.hidden);
-    },
-
-    async saveModel(model, field, value) {
-      try {
-        await this.api("PATCH", "/products/models/" + model.model_id, { [field]: value });
-        this.toast("Modelo guardado", "success");
-      } catch (err) { this.toast(err.message, "error"); }
-    },
-
-    async saveVariant(st, field, value) {
-      try {
-        await this.api("PATCH", "/products/variants/" + st.variant_id, { [field]: value });
-        this.toast("Variante guardada", "success");
-      } catch (err) { this.toast(err.message, "error"); }
-    },
-
+    // Stock absoluto → delta (usado por el editor rápido de la tabla).
     async setStockValue(st, newVal) {
       const target = Math.round(Number(newVal));
       if (isNaN(target) || target < 0) { this.toast("Stock inválido", "error"); return; }
@@ -347,51 +339,67 @@ function adminApp() {
       } catch (err) { this.toast(err.message, "error"); }
     },
 
-    async addVariant(model) {
-      const last = model.storages[model.storages.length - 1];
+    // --- Guardar: aplica el borrador (crea/actualiza/elimina) en una sola tanda ---
+    async saveProductDraft() {
+      if (this.prodEditor.saving) return;
+      const d = this.prodEditor.draft, orig = this.prodEditor.original;
+      this.prodEditor.saving = true;
       try {
-        const v = await this.api("POST", "/products/models/" + model.model_id + "/variants", { storage: "128GB", price: last ? last.p : 0, stock: 0 });
-        model.storages.push({ s: v.storage, p: v.price, stock: v.stock, variant_id: v.id });
-        this.toast("Variante agregada — edita capacidad y precio", "success");
-      } catch (err) { this.toast(err.message, "error"); }
-    },
+        await this.api("PATCH", "/products/" + d.id, { line: d.line, year: d.year, hero_img: d.img || "", hidden: !!d.hidden });
 
-    async deleteVariant(model, st) {
-      if (!(await this.askConfirm(`¿Eliminar la variante ${st.s}?`))) return;
-      try {
-        await this.api("DELETE", "/products/variants/" + st.variant_id);
-        model.storages = model.storages.filter(x => x.variant_id !== st.variant_id);
-        this.toast("Variante eliminada", "success");
-      } catch (err) { this.toast(err.message, "error"); }
-    },
+        // Modelos eliminados (estaban en original, ya no en el borrador)
+        const draftModelIds = new Set(d.models.filter(m => m.model_id).map(m => m.model_id));
+        for (const om of (orig.models || [])) {
+          if (om.model_id && !draftModelIds.has(om.model_id)) await this.api("DELETE", "/products/models/" + om.model_id);
+        }
 
-    async addModel() {
-      const p = this.prodEditor.product;
-      try {
-        const m = await this.api("POST", "/products/" + p.id + "/models", { name: "Nuevo modelo", img: p.img || "", sealed: false });
-        p.models.push({ model_id: m.id, name: m.name, img: m.img, sealed: !!m.sealed, storages: [] });
-        this.toast("Modelo agregado", "success");
-      } catch (err) { this.toast(err.message, "error"); }
-    },
-
-    async deleteModel(model) {
-      if (!(await this.askConfirm(`¿Eliminar el modelo "${model.name}" y todas sus variantes?`))) return;
-      const p = this.prodEditor.product;
-      try {
-        await this.api("DELETE", "/products/models/" + model.model_id);
-        p.models = p.models.filter(m => m.model_id !== model.model_id);
-        this.toast("Modelo eliminado", "success");
-      } catch (err) { this.toast(err.message, "error"); }
+        // Modelos: crear (sin id) o actualizar; luego sus variantes
+        for (const m of d.models) {
+          let modelId = m.model_id;
+          if (!modelId) {
+            const created = await this.api("POST", "/products/" + d.id + "/models", { name: m.name, img: m.img || "", sealed: !!m.sealed });
+            modelId = created.id;
+          } else {
+            await this.api("PATCH", "/products/models/" + modelId, { name: m.name, img: m.img || "", sealed: !!m.sealed });
+          }
+          const om = (orig.models || []).find(x => x.model_id === modelId);
+          const origVars = (om && om.storages) || [];
+          const draftVarIds = new Set(m.storages.filter(s => s.variant_id).map(s => s.variant_id));
+          for (const ov of origVars) {
+            if (ov.variant_id && !draftVarIds.has(ov.variant_id)) await this.api("DELETE", "/products/variants/" + ov.variant_id);
+          }
+          for (const s of m.storages) {
+            if (!s.variant_id) {
+              await this.api("POST", "/products/models/" + modelId + "/variants", { storage: s.s, price: Math.round(Number(s.p)) || 0, stock: Math.round(Number(s.stock)) || 0 });
+            } else {
+              await this.api("PATCH", "/products/variants/" + s.variant_id, { storage: s.s, price: Math.round(Number(s.p)) || 0 });
+              const ov = origVars.find(x => x.variant_id === s.variant_id);
+              const origStock = ov ? Number(ov.stock) : 0;
+              const newStock = Number(s.stock) || 0;
+              if (newStock !== origStock) {
+                await this.api("POST", "/products/variants/" + s.variant_id + "/stock", { delta: newStock - origStock, reason: "manual", note: "Editor" });
+              }
+            }
+          }
+        }
+        this.toast("Cambios guardados ✓", "success");
+        await this.loadProducts();
+        this.prodEditor.open = false;
+      } catch (err) {
+        this.toast("Error al guardar: " + err.message, "error");
+      } finally {
+        this.prodEditor.saving = false;
+      }
     },
 
     async deleteProduct() {
-      const p = this.prodEditor.product;
+      const p = this.prodEditor.draft;
       if (!(await this.askConfirm(`¿Eliminar TODO el producto (línea ${p.line}) con sus modelos y variantes? No se puede deshacer.`))) return;
       try {
         await this.api("DELETE", "/products/" + p.id);
         this.products = this.products.filter(x => x.id !== p.id);
         this.prodEditor.open = false;
-        this.prodEditor.product = null;
+        this.prodEditor.draft = null;
         this.toast("Producto eliminado", "success");
       } catch (err) { this.toast(err.message, "error"); }
     },
@@ -400,6 +408,7 @@ function adminApp() {
     async uploadModelImages(model, fileList) {
       const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
       if (!files.length) return;
+      if (!model.model_id) { this.toast("Guarda el producto antes de subir fotos a un modelo nuevo", "info"); return; }
       if (!Array.isArray(model.gallery)) model.gallery = [];
       let ok = 0;
       for (const file of files) {
@@ -413,7 +422,7 @@ function adminApp() {
           const data = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(data.error || "Error al subir");
           model.gallery.push({ id: data.id, url: data.url, alt: data.alt || "", position: data.position });
-          if (!model.img) { model.img = data.url; await this.api("PATCH", "/products/models/" + model.model_id, { img: data.url }); }
+          if (!model.img) model.img = data.url; // imagen principal en el borrador; se persiste al Guardar
           ok++;
         } catch (err) { this.toast(err.message, "error"); }
       }
@@ -431,18 +440,13 @@ function adminApp() {
         const r = await fetch("/api/admin/uploads/image", { method: "POST", credentials: "include", body: fd });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || "Error al subir");
-        product.img = data.url;
-        await this.api("PATCH", "/products/" + product.id, { hero_img: data.url });
-        this.toast("Imagen principal subida", "success");
+        product.img = data.url; // en el borrador; se persiste al Guardar
+        this.toast("Imagen subida", "success");
       } catch (err) { this.toast(err.message, "error"); }
     },
 
-    async setModelMainImage(model, url) {
-      model.img = url;
-      try {
-        await this.api("PATCH", "/products/models/" + model.model_id, { img: url });
-        this.toast("Imagen principal actualizada", "success");
-      } catch (err) { this.toast(err.message, "error"); }
+    setModelMainImage(model, url) {
+      model.img = url; // en el borrador; se persiste al Guardar
     },
 
     async deleteModelImage(model, img) {
