@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
+<base href="/" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>¡Pago aprobado! — iPhone UP</title>
 <meta name="robots" content="noindex,nofollow" />
@@ -58,6 +59,9 @@
     const o = await r.json();
     const fmt = n => "$" + Number(n).toLocaleString("es-CL");
     const isPickup = o.shipping && (o.shipping.method === "pickup" || o.shipping.serviceCode === "PICKUP");
+    const dest = isPickup
+      ? (o.shipping?.store || "Padre Mariano 98, Of. 105, Providencia")
+      : (o.shipping?.branch || [o.shipping?.county, o.shipping?.region].filter(Boolean).join(", "));
     const intro = document.getElementById("ps-intro");
     if (intro) intro.textContent = isPickup
       ? "Recibimos tu pedido. Te avisaremos por Instagram cuando esté listo para retirar en nuestra tienda (Padre Mariano 98, Of. 105, Providencia)."
@@ -76,6 +80,7 @@
       <div style="display:flex;justify-content:space-between;margin-top:10px;color:#b3b3b3">
         <span>${isPickup ? "Entrega" : "Envío Chilexpress"}</span><span>${isPickup ? "Retiro en tienda" : (o.shipping && Number(o.shipping.cost) > 0 ? fmt(o.shipping.cost) : "Por pagar")}</span>
       </div>
+      ${dest ? `<div style="margin-top:6px;font-size:13px;color:#888">${isPickup ? "Retiras en" : "Sucursal destino"}: <span style="color:#ccc">${dest}</span></div>` : ""}
       <div style="display:flex;justify-content:space-between;margin-top:10px;font-weight:800;font-size:18px">
         <span>Total</span><span style="color:var(--accent,#A4E83A)">${fmt(o.total)}</span>
       </div>
