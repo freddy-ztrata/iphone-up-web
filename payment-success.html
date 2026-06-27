@@ -69,7 +69,7 @@
       <div style="font-size:13px;color:#888;margin-bottom:8px">Orden <strong style="color:#fff">${o.id}</strong></div>
       ${items}
       <div style="display:flex;justify-content:space-between;margin-top:10px;color:#b3b3b3">
-        <span>Envío Chilexpress</span><span>${fmt(o.shipping.cost)}</span>
+        <span>Envío Chilexpress</span><span>${o.shipping && Number(o.shipping.cost) > 0 ? fmt(o.shipping.cost) : "Por pagar"}</span>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:10px;font-weight:800;font-size:18px">
         <span>Total</span><span style="color:var(--accent,#A4E83A)">${fmt(o.total)}</span>

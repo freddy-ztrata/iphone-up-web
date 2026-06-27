@@ -3,8 +3,9 @@
 //   1. Carga items desde cartStore (sessionStorage).
 //   2. Pide regiones a /api/chilexpress/regions y las llena en el <select>.
 //   3. Al elegir región, pide comunas a /api/chilexpress/coverage.
-//   4. Al elegir comuna, llama a /api/chilexpress/quote y muestra opciones.
-//   5. Valida form + opción seleccionada → POST /api/mercadopago/preference.
+//   4. Al elegir comuna, registra el destino. El envío es "por pagar" (costo 0):
+//      no se cotiza precio, el cliente paga el despacho al recibir.
+//   5. Valida form + comuna seleccionada → POST /api/mercadopago/preference.
 //   6. Redirige a init_point (Mercado Pago Checkout Pro).
 
 const $ = sel => document.querySelector(sel);
@@ -29,7 +30,8 @@ function calcSubtotal() {
 }
 
 function calcTotal() {
-  return calcSubtotal() + (state.selectedShip ? Number(state.selectedShip.price) : 0);
+  // El envío es "por pagar" — no se cobra en la web, así que el total es el subtotal.
+  return calcSubtotal();
 }
 
 // ---------- Render ----------
@@ -53,7 +55,7 @@ function renderItems() {
 
 function renderTotals() {
   $("#co-subtotal").textContent = fmt(calcSubtotal());
-  $("#co-ship-cost").textContent = state.selectedShip ? fmt(state.selectedShip.price) : "—";
+  $("#co-ship-cost").textContent = state.selectedShip ? "Por pagar" : "—";
   $("#co-total").textContent = fmt(calcTotal());
 }
 
@@ -62,34 +64,19 @@ function renderShipping() {
   root.classList.remove("loading");
 
   if (!state.selectedCounty) {
-    root.innerHTML = `<p class="co-hint">Completa la región y comuna para cotizar el envío con Chilexpress.</p>`;
-    return;
-  }
-  if (!state.shipServices.length) {
-    root.innerHTML = `<p class="co-hint">No hay servicios disponibles para esta comuna. Escríbenos por Instagram (@iphoneup.cl) para coordinar el envío.</p>`;
+    root.innerHTML = `<p class="co-hint">Selecciona tu región y comuna para registrar la dirección de despacho.</p>`;
     return;
   }
 
-  root.innerHTML = "";
-  state.shipServices.forEach(s => {
-    const label = document.createElement("label");
-    label.className = "co-ship-option" + (state.selectedShip?.code === s.code ? " selected" : "");
-    label.innerHTML = `
-      <input type="radio" name="shipping" value="${s.code}" ${state.selectedShip?.code === s.code ? "checked" : ""} />
+  const countyName = $("#co-county").selectedOptions[0]?.textContent || "tu comuna";
+  root.innerHTML = `
+    <div class="co-ship-porpagar">
+      <span class="co-ship-tag">Por pagar</span>
       <div class="co-ship-info">
-        <div class="co-ship-name">${s.name}</div>
-        <div class="co-ship-meta">${s.deliveryTime ? "Entrega estimada: " + s.deliveryTime : "Chilexpress"}</div>
+        <div class="co-ship-name">Envío por pagar con Chilexpress</div>
+        <div class="co-ship-meta">Despachamos a ${countyName}. El costo del envío lo pagas directamente al recibir tu pedido — no se cobra en esta compra.</div>
       </div>
-      <div class="co-ship-price">${fmt(s.price)}</div>
-    `;
-    label.querySelector("input").addEventListener("change", () => {
-      state.selectedShip = s;
-      renderShipping();
-      renderTotals();
-      updateSubmitEnabled();
-    });
-    root.appendChild(label);
-  });
+    </div>`;
 }
 
 function updateSubmitEnabled() {
@@ -163,32 +150,13 @@ async function loadCounties(regionCode) {
   }
 }
 
-async function quoteShipping(countyCode) {
-  const root = $("#co-shipping");
-  root.classList.add("loading");
-  root.innerHTML = "";
-  state.selectedShip = null;
-  state.shipServices = [];
+// Envío "por pagar": no se cotiza precio. Registramos la comuna como destino y
+// dejamos el envío seleccionado con costo 0 — el cliente paga el despacho al recibir.
+function setPorPagarShipping() {
+  state.selectedShip = { code: "POR_PAGAR", name: "Envío por pagar (Chilexpress)", price: 0 };
+  renderShipping();
   renderTotals();
   updateSubmitEnabled();
-
-  try {
-    const { services } = await apiPost("/api/chilexpress/quote", {
-      destinationCountyCode: countyCode,
-      items: state.items.map(i => ({ price: i.price })),
-    });
-    state.shipServices = services || [];
-    if (state.shipServices.length === 1) {
-      state.selectedShip = state.shipServices[0];
-    }
-    renderShipping();
-    renderTotals();
-    updateSubmitEnabled();
-  } catch (err) {
-    console.error(err);
-    root.classList.remove("loading");
-    root.innerHTML = `<p class="co-hint" style="color:#ff6b6b">No fue posible cotizar el envío (${err.message}). Escríbenos por Instagram (@iphoneup.cl) para coordinarlo.</p>`;
-  }
 }
 
 // ---------- Submit ----------
@@ -279,7 +247,14 @@ function init() {
   });
   $("#co-county").addEventListener("change", e => {
     state.selectedCounty = e.target.value;
-    if (state.selectedCounty) quoteShipping(state.selectedCounty);
+    if (state.selectedCounty) {
+      setPorPagarShipping();
+    } else {
+      state.selectedShip = null;
+      renderShipping();
+      renderTotals();
+      updateSubmitEnabled();
+    }
   });
 }
 

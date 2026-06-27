@@ -128,8 +128,28 @@ app.use("/api/admin", adminRouter);
 
 // ---------- Admin UI ----------
 const ROOT = path.resolve(__dirname, "..");
-app.get(["/admin", "/admin/"], (_req, res) => res.sendFile(path.join(ROOT, "admin.html")));
-app.get("/admin/login", (_req, res) => res.sendFile(path.join(ROOT, "admin.html")));
+
+// Alpine.js (admin) evalúa sus expresiones (x-show, x-data, etc.) con el
+// constructor Function, que la CSP global bloquea al no incluir 'unsafe-eval'.
+// Sin él Alpine arranca pero no aplica ningún x-show: el login y el command
+// palette se renderizan a la vez y el palette tapa el formulario de acceso.
+// Servimos SOLO el HTML del admin con una CSP propia que permite eval,
+// manteniendo el sitio público estricto.
+const adminPageCsp = helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    fontSrc: ["'self'", "data:"],
+    imgSrc: ["'self'", "data:", "https:", "blob:"],
+    connectSrc: ["'self'"],
+    objectSrc: ["'none'"],
+  },
+});
+
+const sendAdmin = (_req, res) => res.sendFile(path.join(ROOT, "admin.html"));
+app.get(["/admin", "/admin/", "/admin.html"], adminPageCsp, sendAdmin);
+app.get("/admin/login", adminPageCsp, sendAdmin);
 
 // ---------- Uploads (volumen persistente) ----------
 app.use("/uploads", express.static(path.join(db.DATA_DIR, "uploads"), {

@@ -172,6 +172,30 @@
   color: var(--accent, #A4E83A);
 }
 
+/* Envío por pagar (no se cobra en la web) */
+.co-ship-porpagar {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(164,232,58,0.35);
+  border-radius: 12px;
+  background: rgba(164,232,58,0.06);
+}
+.co-ship-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0a0a0a;
+  background: var(--accent, #A4E83A);
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+.co-ship-porpagar .co-ship-name { font-weight: 600; margin-bottom: 4px; }
+.co-ship-porpagar .co-ship-meta { font-size: 13px; color: #b3b3b3; line-height: 1.5; }
+
 /* ---------- Pago ---------- */
 .co-pay-icons {
   display: flex;
