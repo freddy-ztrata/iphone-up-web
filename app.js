@@ -39,7 +39,13 @@ const el = (tag, attrs={}, children=[]) => {
 
 // ---------- Rendering: Catalog ----------
 function visiblePhones() {
-  const base = CATALOG.filter(p => !p.hidden);
+  // Solo productos visibles y con al menos una variante vendible (evita que un
+  // producto sin modelos/variantes rompa el render de toda la grilla).
+  const base = CATALOG.filter(p =>
+    !p.hidden &&
+    Array.isArray(p.models) &&
+    p.models.some(m => Array.isArray(m.storages) && m.storages.length)
+  );
   let list;
   if (state.filter === "new")          list = base.filter(p => p.id >= 15);
   else if (state.filter === "classic") list = base.filter(p => p.id < 15);

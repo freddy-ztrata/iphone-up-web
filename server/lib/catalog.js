@@ -94,7 +94,10 @@ function buildCatalog(opts = {}) {
  * fmtCLP — todo lo que data.js exporta hoy.
  */
 function buildDataJs() {
-  const catalog = buildCatalog({ includeHidden: true });
+  // Excluimos del catálogo público los productos sin variantes vendibles (sin
+  // modelos o con modelos sin storages) para no romper el render del frontend.
+  const catalog = buildCatalog({ includeHidden: true })
+    .filter(p => Array.isArray(p.models) && p.models.some(m => Array.isArray(m.storages) && m.storages.length));
   // TESTIMONIALS/STATS/FAQS/TRADEIN_PRICES siguen "duras" por ahora — están en
   // settings y pueden editarse desde admin más adelante. Para el MVP las
   // dejamos hardcoded acá para no romper el frontend.
