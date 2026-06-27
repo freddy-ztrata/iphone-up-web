@@ -85,6 +85,17 @@ app.get("/api/health", (_req, res) => {
   const chilexpressConfigured = Boolean(process.env.CHILEXPRESS_API_KEY_RATING);
   const productCount = db.prepare("SELECT COUNT(*) AS n FROM products").get().n;
   const userCount = db.prepare("SELECT COUNT(*) AS n FROM users WHERE is_active = 1").get().n;
+  // Diagnóstico de órdenes (sin PII): cuántas hay y estado de las últimas.
+  let orders = {};
+  try {
+    orders.total = db.prepare("SELECT COUNT(*) AS n FROM orders").get().n;
+    orders.recent = db.prepare(`
+      SELECT id, status, total, created_at,
+             CASE WHEN buyer_json IS NULL OR buyer_json = '' THEN 0 ELSE 1 END AS has_buyer,
+             CASE WHEN items_json IS NULL OR items_json IN ('', '[]') THEN 0 ELSE 1 END AS has_items
+      FROM orders ORDER BY created_at DESC LIMIT 8
+    `).all();
+  } catch (e) { orders.err = e.message; }
   res.json({
     ok: true,
     build: BUILD_SHA,
@@ -97,6 +108,7 @@ app.get("/api/health", (_req, res) => {
       publicUrl: PUBLIC_URL,
     },
     db: { ok: true, products: productCount, users: userCount, path: db.DB_PATH },
+    orders,
   });
 });
 
