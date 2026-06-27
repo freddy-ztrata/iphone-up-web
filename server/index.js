@@ -96,30 +96,6 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// DIAGNÓSTICO TEMPORAL — prueba el roundtrip de la cookie de sesión detrás del
-// proxy (sin necesitar login). 1ra llamada setea un token en la sesión; las
-// siguientes deberían leerlo de vuelta. Si no, la cookie no persiste.
-app.get("/api/_diag/session", (req, res) => {
-  const info = {
-    reqSecure: req.secure,
-    forwardedProto: req.headers["x-forwarded-proto"] || null,
-    nodeEnv: process.env.NODE_ENV || null,
-    hasCookie: Boolean(req.headers.cookie),
-    now: Date.now(),
-  };
-  try { info.schema = db.prepare("PRAGMA table_info(sessions)").all().map(c => `${c.cid}:${c.name}:${c.type}`); }
-  catch (e) { info.schemaErr = e.message; }
-  try { info.sessionsCount = db.prepare("SELECT COUNT(*) AS n FROM sessions").get().n; }
-  catch (e) { info.countErr = e.message; }
-  try { info.rows = db.prepare("SELECT sid, expire, sess FROM sessions ORDER BY rowid DESC LIMIT 3").all(); }
-  catch (e) { info.rowsErr = e.message; }
-  if (!req.session.diagToken) {
-    req.session.diagToken = "tok-" + Date.now();
-    return res.json({ phase: "set", diagToken: req.session.diagToken, ...info });
-  }
-  res.json({ phase: "read", diagToken: req.session.diagToken, ...info });
-});
-
 // ---------- Ruta dinámica /data.js (catálogo desde DB) ----------
 // Cache local en memoria invalidado cuando algo del catálogo cambia.
 // Por ahora regeneramos en cada request (es barato: <5ms para 7 productos)
