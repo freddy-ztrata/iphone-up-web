@@ -231,7 +231,7 @@
                           x-text="product.hidden ? 'Oculto' : 'Visible'"></span>
                   </div>
                   <div class="ac-td ac-td-actions">
-                    <button class="ac-icon-btn" @click="openProductDetail(product.id)" title="Editar">✎</button>
+                    <button class="ac-icon-btn" @click="openProductEditor(product.id)" title="Editar">✎</button>
                     <button class="ac-icon-btn" @click="toggleHidden(product)" :title="product.hidden ? 'Mostrar' : 'Ocultar'">
                       <span x-text="product.hidden ? '◯' : '●'"></span>
                     </button>
@@ -385,7 +385,7 @@
         </div>
 
         <div x-show="settingsTab === 'users'">
-          <button class="ac-btn-primary" @click="newUser()">+ Nuevo usuario</button>
+          <button class="ac-btn-primary" @click="openUserEditor('create')">+ Nuevo usuario</button>
           <div class="ac-users-list">
             <template x-for="u in users" :key="u.id">
               <div class="ac-user-row">
@@ -397,7 +397,7 @@
                 <span class="ac-role-pill" x-text="u.role"></span>
                 <span class="ac-state-pill" :class="u.is_active ? 'state-approved' : 'state-rejected'"
                       x-text="u.is_active ? 'activo' : 'inactivo'"></span>
-                <button class="ac-icon-btn" @click="editUser(u)">✎</button>
+                <button class="ac-icon-btn" @click="openUserEditor('edit', u)">✎</button>
               </div>
             </template>
           </div>
@@ -478,6 +478,103 @@
         <button x-show="t.undo" @click="t.undo(); removeToast(t.id)" class="ac-toast-undo">Deshacer</button>
       </div>
     </template>
+  </div>
+
+  <!-- ========== EDITOR DE PRODUCTO ========== -->
+  <div class="ac-drawer-overlay" x-show="prodEditor.open" @click="prodEditor.open = false" x-cloak></div>
+  <aside class="ac-drawer ac-drawer-wide" :class="{ open: prodEditor.open }">
+    <template x-if="prodEditor.product">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <header class="ac-drawer-head">
+          <h2>Editar — iPhone <span x-text="prodEditor.product.line"></span></h2>
+          <button class="ac-icon-btn" @click="prodEditor.open = false">✕</button>
+        </header>
+        <div class="ac-edit-body">
+          <div class="ac-edit-grid">
+            <label class="ac-edit-field"><span>Línea</span>
+              <input x-model="prodEditor.product.line" @change="saveProduct('line', prodEditor.product.line)" />
+            </label>
+            <label class="ac-edit-field"><span>Año</span>
+              <input type="number" x-model.number="prodEditor.product.year" @change="saveProduct('year', prodEditor.product.year)" />
+            </label>
+            <label class="ac-edit-field" style="grid-column:1/-1"><span>Imagen principal (ruta)</span>
+              <input x-model="prodEditor.product.img" @change="saveProduct('hero_img', prodEditor.product.img)" placeholder="assets/iphones/iphone-15.webp" />
+            </label>
+            <label class="ac-edit-checkbox" style="grid-column:1/-1">
+              <input type="checkbox" :checked="!prodEditor.product.hidden" @change="toggleProductHidden(prodEditor.product, $event.target.checked)" />
+              <span>Visible en la web</span>
+            </label>
+          </div>
+
+          <div class="ac-edit-section-title">Modelos y variantes</div>
+          <template x-for="model in prodEditor.product.models" :key="model.model_id">
+            <div class="ac-edit-model">
+              <div class="ac-edit-model-head">
+                <input x-model="model.name" @change="saveModel(model, 'name', model.name)" placeholder="Nombre del modelo" />
+                <label class="ac-edit-checkbox"><input type="checkbox" x-model="model.sealed" @change="saveModel(model, 'sealed', model.sealed)" /><span>Sellado</span></label>
+                <button class="ac-icon-btn" @click="deleteModel(model)" title="Eliminar modelo">🗑</button>
+              </div>
+              <label class="ac-edit-field"><span>Imagen del modelo (ruta, opcional)</span>
+                <input x-model="model.img" @change="saveModel(model, 'img', model.img)" placeholder="(usa la imagen principal si se deja vacío)" />
+              </label>
+              <table class="ac-edit-variants">
+                <thead><tr><th>Capacidad</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
+                <tbody>
+                  <template x-for="st in model.storages" :key="st.variant_id">
+                    <tr>
+                      <td><input x-model="st.s" @change="saveVariant(st, 'storage', st.s)" /></td>
+                      <td><input type="number" class="ac-mono" x-model.number="st.p" @change="saveVariant(st, 'price', st.p)" /></td>
+                      <td><input type="number" class="ac-mono" :value="st.stock" @change="setStockValue(st, $event.target.value)" /></td>
+                      <td><button class="ac-icon-btn" @click="deleteVariant(model, st)" title="Eliminar variante">🗑</button></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <button class="ac-btn-ghost ac-btn-sm" @click="addVariant(model)">+ Variante</button>
+            </div>
+          </template>
+          <button class="ac-btn-ghost" @click="addModel()">+ Agregar modelo</button>
+
+          <div class="ac-edit-danger">
+            <button class="ac-btn-danger" @click="deleteProduct()">Eliminar producto completo</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </aside>
+
+  <!-- ========== MODAL DE USUARIO ========== -->
+  <div class="ac-modal-overlay" x-show="userEditor.open" @click.self="userEditor.open = false" x-cloak>
+    <div class="ac-modal">
+      <header class="ac-modal-head">
+        <h2 x-text="userEditor.mode === 'create' ? 'Nuevo usuario' : 'Editar usuario'"></h2>
+        <button class="ac-icon-btn" @click="userEditor.open = false">✕</button>
+      </header>
+      <div class="ac-modal-body">
+        <label class="ac-edit-field"><span>Email</span>
+          <input type="email" x-model="userEditor.email" :disabled="userEditor.mode === 'edit'" placeholder="correo@ejemplo.cl" autocomplete="off" />
+        </label>
+        <label class="ac-edit-field"><span>Nombre</span>
+          <input x-model="userEditor.name" placeholder="Nombre" />
+        </label>
+        <label class="ac-edit-field"><span>Rol</span>
+          <select x-model="userEditor.role">
+            <option value="admin">Admin</option>
+            <option value="editor">Editor</option>
+          </select>
+        </label>
+        <label class="ac-edit-field"><span x-text="userEditor.mode === 'create' ? 'Contraseña' : 'Nueva contraseña (vacío = no cambiar)'"></span>
+          <input type="password" x-model="userEditor.password" placeholder="mínimo 8 caracteres" autocomplete="new-password" />
+        </label>
+        <label class="ac-edit-checkbox" x-show="userEditor.mode === 'edit'">
+          <input type="checkbox" x-model="userEditor.is_active" /><span>Usuario activo</span>
+        </label>
+      </div>
+      <footer class="ac-modal-foot">
+        <button class="ac-btn-ghost" @click="userEditor.open = false">Cancelar</button>
+        <button class="ac-btn-primary" @click="saveUser()" :disabled="userEditor.saving" x-text="userEditor.saving ? 'Guardando…' : 'Guardar'"></button>
+      </footer>
+    </div>
   </div>
 
 </div>

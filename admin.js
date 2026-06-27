@@ -27,6 +27,8 @@ function adminApp() {
     palette: { open: false, query: "", results: [], idx: 0 },
     toasts: [],
     bulkPriceOpen: false,
+    prodEditor: { open: false, product: null },
+    userEditor: { open: false, mode: "create", id: null, email: "", name: "", role: "admin", password: "", is_active: true, saving: false },
 
     nav: [
       { id: "dashboard", label: "Dashboard", icon: "◐" },
@@ -269,8 +271,113 @@ function adminApp() {
       this.drawer.open = true;
     },
 
-    newProduct() {
-      this.toast("Próximamente: crear producto desde admin (por ahora editar data.js)", "info");
+    // ----- Productos: crear + editor robusto -----
+    async newProduct() {
+      const maxLine = Math.max(0, ...this.products.map(p => parseInt(p.line, 10) || 0));
+      try {
+        const created = await this.api("POST", "/products", { line: String(maxLine + 1), year: new Date().getFullYear() });
+        if (!Array.isArray(created.models)) created.models = [];
+        this.products.unshift(created);
+        this.openProductEditor(created.id);
+        this.toast("Producto creado — agrega modelos y variantes", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    openProductEditor(productId) {
+      const p = this.products.find(x => x.id === productId);
+      if (!p) return;
+      if (!Array.isArray(p.models)) p.models = [];
+      this.prodEditor.product = p;
+      this.prodEditor.open = true;
+    },
+
+    async saveProduct(field, value) {
+      const p = this.prodEditor.product;
+      if (!p) return;
+      try {
+        await this.api("PATCH", "/products/" + p.id, { [field]: value });
+        this.toast("Producto guardado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    toggleProductHidden(p, visible) {
+      p.hidden = !visible;
+      this.saveProduct("hidden", p.hidden);
+    },
+
+    async saveModel(model, field, value) {
+      try {
+        await this.api("PATCH", "/products/models/" + model.model_id, { [field]: value });
+        this.toast("Modelo guardado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async saveVariant(st, field, value) {
+      try {
+        await this.api("PATCH", "/products/variants/" + st.variant_id, { [field]: value });
+        this.toast("Variante guardada", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async setStockValue(st, newVal) {
+      const target = Math.round(Number(newVal));
+      if (isNaN(target) || target < 0) { this.toast("Stock inválido", "error"); return; }
+      const delta = target - st.stock;
+      if (delta === 0) return;
+      try {
+        const updated = await this.api("POST", "/products/variants/" + st.variant_id + "/stock", { delta, reason: "manual", note: "Editor" });
+        st.stock = updated.stock;
+        this.toast("Stock: " + updated.stock, "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async addVariant(model) {
+      const last = model.storages[model.storages.length - 1];
+      try {
+        const v = await this.api("POST", "/products/models/" + model.model_id + "/variants", { storage: "128GB", price: last ? last.p : 0, stock: 0 });
+        model.storages.push({ s: v.storage, p: v.price, stock: v.stock, variant_id: v.id });
+        this.toast("Variante agregada — edita capacidad y precio", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async deleteVariant(model, st) {
+      if (!confirm(`¿Eliminar la variante ${st.s}?`)) return;
+      try {
+        await this.api("DELETE", "/products/variants/" + st.variant_id);
+        model.storages = model.storages.filter(x => x.variant_id !== st.variant_id);
+        this.toast("Variante eliminada", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async addModel() {
+      const p = this.prodEditor.product;
+      try {
+        const m = await this.api("POST", "/products/" + p.id + "/models", { name: "Nuevo modelo", img: p.img || "", sealed: false });
+        p.models.push({ model_id: m.id, name: m.name, img: m.img, sealed: !!m.sealed, storages: [] });
+        this.toast("Modelo agregado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async deleteModel(model) {
+      if (!confirm(`¿Eliminar el modelo "${model.name}" y todas sus variantes?`)) return;
+      const p = this.prodEditor.product;
+      try {
+        await this.api("DELETE", "/products/models/" + model.model_id);
+        p.models = p.models.filter(m => m.model_id !== model.model_id);
+        this.toast("Modelo eliminado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async deleteProduct() {
+      const p = this.prodEditor.product;
+      if (!confirm(`¿Eliminar TODO el producto (línea ${p.line}) con sus modelos y variantes? No se puede deshacer.`)) return;
+      try {
+        await this.api("DELETE", "/products/" + p.id);
+        this.products = this.products.filter(x => x.id !== p.id);
+        this.prodEditor.open = false;
+        this.prodEditor.product = null;
+        this.toast("Producto eliminado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
     },
 
     // ----- Cupones -----
@@ -393,29 +500,38 @@ function adminApp() {
       } catch (err) { this.toast(err.message, "error"); }
     },
 
-    // ----- Users -----
-    newUser() {
-      const email = prompt("Email del nuevo usuario:");
-      if (!email) return;
-      const password = prompt("Contraseña (mínimo 8 caracteres):");
-      if (!password) return;
-      const name = prompt("Nombre:") || "";
-      this.api("POST", "/users", { email, password, name, role: "admin" })
-        .then(() => { this.toast("Usuario creado", "success"); this.loadUsers(); })
-        .catch(err => this.toast(err.message, "error"));
+    // ----- Usuarios: crear / editar -----
+    openUserEditor(mode, user = null) {
+      if (mode === "edit" && user) {
+        this.userEditor = { open: true, mode: "edit", id: user.id, email: user.email, name: user.name || "", role: user.role || "admin", password: "", is_active: !!user.is_active, saving: false };
+      } else {
+        this.userEditor = { open: true, mode: "create", id: null, email: "", name: "", role: "admin", password: "", is_active: true, saving: false };
+      }
     },
 
-    editUser(u) {
-      const action = confirm(`Usuario: ${u.email}\nAceptar = resetear contraseña\nCancelar = ${u.is_active ? 'desactivar' : 'activar'}`);
-      if (action) {
-        const pw = prompt("Nueva contraseña (mínimo 8):");
-        if (pw) this.api("PATCH", "/users/" + u.id, { password: pw })
-          .then(() => this.toast("Contraseña reseteada", "success"))
-          .catch(err => this.toast(err.message, "error"));
-      } else {
-        this.api("PATCH", "/users/" + u.id, { is_active: !u.is_active })
-          .then(() => { u.is_active = !u.is_active; this.toast("Usuario actualizado", "success"); })
-          .catch(err => this.toast(err.message, "error"));
+    async saveUser() {
+      const e = this.userEditor;
+      if (e.saving) return;
+      if (e.mode === "create" && !/\S+@\S+\.\S+/.test(e.email)) return this.toast("Email inválido", "error");
+      if (e.mode === "create" && (!e.password || e.password.length < 8)) return this.toast("Contraseña: mínimo 8 caracteres", "error");
+      if (e.password && e.password.length < 8) return this.toast("Contraseña: mínimo 8 caracteres", "error");
+      e.saving = true;
+      try {
+        if (e.mode === "create") {
+          await this.api("POST", "/users", { email: e.email.trim(), name: e.name.trim(), role: e.role, password: e.password });
+          this.toast("Usuario creado", "success");
+        } else {
+          const body = { name: e.name.trim(), role: e.role, is_active: e.is_active };
+          if (e.password) body.password = e.password;
+          await this.api("PATCH", "/users/" + e.id, body);
+          this.toast("Usuario actualizado", "success");
+        }
+        this.userEditor.open = false;
+        this.loadUsers();
+      } catch (err) {
+        this.toast(err.message, "error");
+      } finally {
+        this.userEditor.saving = false;
       }
     },
 

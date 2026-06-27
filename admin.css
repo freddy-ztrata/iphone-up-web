@@ -634,6 +634,43 @@
   font-size: 14px;
 }
 
+/* ============== EDITOR ROBUSTO (productos / usuarios) ============== */
+.ac-drawer-wide { width: min(640px, 100vw); }
+.ac-edit-body { padding: 22px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+.ac-edit-body input:not([type=checkbox]), .ac-edit-body select,
+.ac-modal-body input:not([type=checkbox]), .ac-modal-body select {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 14px; padding: 9px 12px; border-radius: 9px; width: 100%;
+  transition: border-color .15s, background .15s;
+}
+.ac-edit-body input:focus, .ac-edit-body select:focus,
+.ac-modal-body input:focus, .ac-modal-body select:focus { outline: none; border-color: var(--accent); background: var(--accent-soft-bg); }
+.ac-edit-body input:disabled, .ac-modal-body input:disabled { opacity: .5; cursor: not-allowed; }
+.ac-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ac-edit-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.ac-edit-field > span { font-size: 11px; font-weight: 600; color: var(--text-mute); letter-spacing: .08em; text-transform: uppercase; }
+.ac-edit-checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); cursor: pointer; margin: 0; }
+.ac-edit-checkbox input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+.ac-edit-section-title { font-size: 12px; font-weight: 700; color: var(--text-mute); letter-spacing: .08em; text-transform: uppercase; margin-top: 6px; }
+.ac-edit-model { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: var(--surface-0); display: flex; flex-direction: column; gap: 10px; }
+.ac-edit-model-head { display: flex; align-items: center; gap: 10px; }
+.ac-edit-model-head input { flex: 1; font-weight: 600; }
+.ac-edit-variants { width: 100%; border-collapse: collapse; }
+.ac-edit-variants th { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-mute); text-align: left; padding: 0 4px 4px; font-weight: 600; }
+.ac-edit-variants td { padding: 3px 4px; }
+.ac-edit-variants input { padding: 7px 9px !important; font-size: 13px !important; }
+.ac-edit-variants td:last-child { width: 36px; text-align: center; }
+.ac-btn-sm { padding: 7px 14px; font-size: 12px; align-self: flex-start; }
+.ac-btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background .15s; }
+.ac-btn-danger:hover { background: rgba(255,90,90,0.12); }
+.ac-edit-danger { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--border); }
+.ac-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ac-modal { width: min(440px, 100%); background: var(--surface-1); border: 1px solid var(--border-glow); border-radius: 18px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; max-height: 90vh; }
+.ac-modal-head { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.ac-modal-head h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.ac-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.ac-modal-foot { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
 /* ============== COMMAND PALETTE ============== */
 .ac-palette-overlay {
   position: fixed; inset: 0;
