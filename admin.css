@@ -466,7 +466,7 @@
 /* ============== STOCK VIEW ============== */
 .ac-stock-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
   gap: 16px;
 }
 .ac-stock-card {
@@ -505,6 +505,12 @@
 .ac-stock-cell.low { background: rgba(255,169,64,0.15); color: var(--warn); }
 .ac-stock-cell.zero { background: rgba(255,90,90,0.15); color: var(--danger); }
 .ac-stock-na { color: var(--text-mute); }
+.ac-stock-rowlabel { white-space: nowrap; }
+.ac-stock-model { display: inline-block; min-width: 62px; font-weight: 700; }
+.ac-stock-color { color: var(--text-mute); }
+.ac-stock-cell.off { opacity: .4; }
+.ac-stock-cell.off:hover { opacity: 1; }
+.ac-stock-table tbody tr.ac-stock-modelstart td { border-top: 1px solid var(--border); }
 
 /* ============== COUPONS ============== */
 .ac-coupons-grid {

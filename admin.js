@@ -362,6 +362,25 @@ function adminApp() {
       (model.storages || []).forEach(v => { if (v.s === oldSize) v.s = ns; });
     },
 
+    // --- Stock: pivote capacidad × color por modelo ---
+    stockCaps(product) {
+      const set = new Set();
+      (product.models || []).forEach(m => (m.storages || []).forEach(v => set.add(v.s)));
+      const toGB = s => { const n = parseFloat(s) || 0; return /tb/i.test(s) ? n * 1024 : n; };
+      return [...set].sort((a, b) => toGB(a) - toGB(b));
+    },
+    stockColors(model) {
+      const out = [];
+      (model.storages || []).forEach(v => { const c = v.color || ""; if (!out.includes(c)) out.push(c); });
+      return out.length ? out : [""];
+    },
+    stockVariant(model, cap, color) {
+      return (model.storages || []).find(v => v.s === cap && (v.color || "") === (color || "")) || null;
+    },
+    modelShort(model, product) {
+      return (model.name || "").replace("iPhone " + product.line, "").trim() || "Base";
+    },
+
     // Stock absoluto → delta (usado por el editor rápido de la tabla).
     async setStockValue(st, newVal) {
       const target = Math.round(Number(newVal));

@@ -302,26 +302,35 @@
               <h3 x-text="'iPhone ' + product.line"></h3>
               <table class="ac-stock-table">
                 <thead>
-                  <tr><th>Modelo</th><th>64GB</th><th>128GB</th><th>256GB</th><th>512GB</th></tr>
+                  <tr>
+                    <th>Modelo · Color</th>
+                    <template x-for="cap in stockCaps(product)" :key="cap"><th x-text="cap"></th></template>
+                  </tr>
                 </thead>
                 <tbody>
                   <template x-for="model in product.models" :key="model.model_id">
-                    <tr>
-                      <td x-text="model.name.replace('iPhone ' + product.line, '').trim() || 'Base'"></td>
-                      <template x-for="cap in ['64GB','128GB','256GB','512GB']" :key="cap">
-                        <td>
-                          <template x-if="model.storages.find(s => s.s === cap)">
-                            <button class="ac-stock-cell"
-                                    :class="{ low: model.storages.find(s => s.s === cap).stock <= 2, zero: model.storages.find(s => s.s === cap).stock === 0 }"
-                                    @click="openStockPopover(model.storages.find(s => s.s === cap))"
-                                    x-text="model.storages.find(s => s.s === cap).stock"></button>
-                          </template>
-                          <template x-if="!model.storages.find(s => s.s === cap)">
-                            <span class="ac-stock-na">—</span>
-                          </template>
+                    <template x-for="(color, ci) in stockColors(model)" :key="model.model_id + '|' + color">
+                      <tr :class="{ 'ac-stock-modelstart': ci === 0 }">
+                        <td class="ac-stock-rowlabel">
+                          <span class="ac-stock-model" x-text="ci === 0 ? modelShort(model, product) : ''"></span>
+                          <span class="ac-stock-color" x-text="color || 'Único'"></span>
                         </td>
-                      </template>
-                    </tr>
+                        <template x-for="cap in stockCaps(product)" :key="cap">
+                          <td>
+                            <template x-if="stockVariant(model, cap, color)">
+                              <button class="ac-stock-cell"
+                                      :class="{ low: stockVariant(model, cap, color).stock > 0 && stockVariant(model, cap, color).stock <= 2, zero: stockVariant(model, cap, color).stock === 0, off: !stockVariant(model, cap, color).is_active }"
+                                      :title="stockVariant(model, cap, color).is_active ? '' : 'Variante inactiva (oculta en la web)'"
+                                      @click="openStockPopover(stockVariant(model, cap, color))"
+                                      x-text="stockVariant(model, cap, color).stock"></button>
+                            </template>
+                            <template x-if="!stockVariant(model, cap, color)">
+                              <span class="ac-stock-na">—</span>
+                            </template>
+                          </td>
+                        </template>
+                      </tr>
+                    </template>
                   </template>
                 </tbody>
               </table>
