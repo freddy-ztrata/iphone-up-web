@@ -10,7 +10,7 @@ module.exports = {
   ],
 
   STATS: [
-    { n: "+5.000",  l: "iPhones vendidos" },
+    { n: "+2.000",  l: "iPhones vendidos" },
     { n: "6 meses", l: "garantía oficial" },
     { n: "100%",    l: "originales" },
     { n: "4.9★",    l: "calificación clientes" },
