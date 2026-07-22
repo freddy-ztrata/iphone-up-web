@@ -5,6 +5,10 @@
 const CATALOG = window.CATALOG;
 const fmtCLP = window.fmtCLP;
 
+// Comisión del medio de pago (3,5%) — se desglosa y se suma al total, siempre activa.
+const PAY_FEE_RATE = 0.035;
+const payFee = (subtotal) => Math.round((Number(subtotal) || 0) * PAY_FEE_RATE);
+
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 const el = (tag, attrs={}, children=[]) => {
@@ -372,12 +376,14 @@ function updateCartBadge() {
 }
 function renderCart() {
   const list = $("#cart-list");
-  const total = $("#cart-total");
   const items = window.cartStore.read();
   list.innerHTML = "";
+  const subtotal = items.reduce((a, v) => a + (Number(v.price) || 0), 0);
+  const fee = payFee(subtotal);
+  const setMoney = (sel, n) => { const e = $(sel); if (e) e.textContent = fmtCLP(n); };
   if (items.length === 0) {
     list.appendChild(el("p", { class: "cart-empty" }, "Tu carro está vacío."));
-    total.textContent = fmtCLP(0);
+    setMoney("#cart-subtotal", 0); setMoney("#cart-commission", 0); setMoney("#cart-total", 0);
     return;
   }
   items.forEach((v, i) => {
@@ -395,7 +401,9 @@ function renderCart() {
     ]);
     list.appendChild(item);
   });
-  total.textContent = fmtCLP(items.reduce((a, v) => a + v.price, 0));
+  setMoney("#cart-subtotal", subtotal);
+  setMoney("#cart-commission", fee);
+  setMoney("#cart-total", subtotal + fee);
 }
 
 function bindGlobalUI() {

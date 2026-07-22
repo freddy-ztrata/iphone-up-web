@@ -14,6 +14,9 @@
 const $ = sel => document.querySelector(sel);
 const fmt = window.fmtCLP || (n => "$" + Number(n).toLocaleString("es-CL"));
 
+// Comisión del medio de pago (3,5%) — se desglosa y se suma al total, siempre activa.
+const PAY_FEE_RATE = 0.035;
+
 const state = {
   items: [],
   regions: [],
@@ -37,9 +40,13 @@ function calcSubtotal() {
   return state.items.reduce((a, i) => a + (Number(i.price) || 0), 0);
 }
 
+function calcCommission() {
+  return Math.round(calcSubtotal() * PAY_FEE_RATE);
+}
+
 function calcTotal() {
-  // El envío es "por pagar" — no se cobra en la web, así que el total es el subtotal.
-  return calcSubtotal();
+  // Envío "por pagar" (no se cobra en la web) + comisión del medio de pago (3,5%).
+  return calcSubtotal() + calcCommission();
 }
 
 // ---------- Render ----------
@@ -63,6 +70,8 @@ function renderItems() {
 
 function renderTotals() {
   $("#co-subtotal").textContent = fmt(calcSubtotal());
+  const comm = $("#co-commission");
+  if (comm) comm.textContent = fmt(calcCommission());
   $("#co-ship-cost").textContent = !state.selectedShip ? "—" : (state.selectedShip.code === "PICKUP" ? "Retiro en tienda" : "Por pagar");
   $("#co-total").textContent = fmt(calcTotal());
 }

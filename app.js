@@ -6,6 +6,10 @@ const STATS       = window.STATS;
 const FAQS        = window.FAQS;
 const fmtCLP      = window.fmtCLP;
 
+// Comisión del medio de pago (3,5%) — se desglosa y se suma al total, siempre activa.
+const PAY_FEE_RATE = 0.035;
+const payFee = (subtotal) => Math.round((Number(subtotal) || 0) * PAY_FEE_RATE);
+
 // ---------- State ----------
 const state = {
   filter: "all",          // all | new | classic
@@ -164,11 +168,13 @@ function renderCart() {
   const overlay = $("#cart-overlay");
   overlay.style.display = state.cartOpen ? "block" : "none";
   const list = $("#cart-list");
-  const total = $("#cart-total");
   list.innerHTML = "";
+  const subtotal = state.cart.reduce((a, v) => a + (Number(v.price) || 0), 0);
+  const fee = payFee(subtotal);
+  const setMoney = (sel, n) => { const e = $(sel); if (e) e.textContent = fmtCLP(n); };
   if (state.cart.length === 0) {
     list.appendChild(el("p", { class: "cart-empty" }, "Tu carro está vacío."));
-    total.textContent = fmtCLP(0);
+    setMoney("#cart-subtotal", 0); setMoney("#cart-commission", 0); setMoney("#cart-total", 0);
     return;
   }
   state.cart.forEach((v, i) => {
@@ -182,7 +188,9 @@ function renderCart() {
     ]);
     list.appendChild(item);
   });
-  total.textContent = fmtCLP(state.cart.reduce((a, v) => a + v.price, 0));
+  setMoney("#cart-subtotal", subtotal);
+  setMoney("#cart-commission", fee);
+  setMoney("#cart-total", subtotal + fee);
 }
 
 // ---------- Trade-in ----------

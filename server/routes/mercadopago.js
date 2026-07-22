@@ -80,7 +80,23 @@ router.post("/preference", async (req, res) => {
   }
 
   const subtotal = items.reduce((a, i) => a + Math.round(Number(i.price)) * Number(i.qty || 1), 0);
-  const total = subtotal + Math.round(Number(shipping.cost) || 0);
+
+  // Comisión del medio de pago (3,5%) — se cobra al cliente, desglosada como ítem en MP.
+  const PAY_FEE_RATE = 0.035;
+  const paymentFee = Math.round(subtotal * PAY_FEE_RATE);
+  if (paymentFee > 0) {
+    mpItems.push({
+      id: "payment-fee",
+      title: "Comisión medio de pago (3,5%)",
+      description: "Recargo por procesamiento del pago",
+      quantity: 1,
+      currency_id: "CLP",
+      unit_price: paymentFee,
+      category_id: "services",
+    });
+  }
+
+  const total = subtotal + paymentFee + Math.round(Number(shipping.cost) || 0);
 
   const preferenceBody = {
     items: mpItems,
