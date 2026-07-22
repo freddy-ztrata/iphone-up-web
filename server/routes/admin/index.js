@@ -13,6 +13,7 @@ const auditRouter = require("./audit");
 const uploadsRouter = require("./uploads");
 const dashboardRouter = require("./dashboard");
 const analyticsRouter = require("./analytics");
+const settingsRouter = require("./settings");
 
 const router = express.Router();
 
@@ -29,5 +30,6 @@ router.use("/audit-log", auditRouter);
 router.use("/uploads", uploadsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/analytics", analyticsRouter);
+router.use("/settings", settingsRouter);
 
 module.exports = router;

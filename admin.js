@@ -21,6 +21,7 @@ function adminApp() {
     dashboard: null,
     analytics: { realtime: null, overview: null, days: 30 },
     systemInfo: null,
+    payFee: { enabled: true, pct: 3.5, saving: false },
     loadingProducts: false,
     orderFilter: "",
 
@@ -147,7 +148,7 @@ function adminApp() {
       if (viewId === "orders") this.loadOrders();
       if (viewId === "dashboard") this.loadDashboard();
       if (viewId === "analytics") this.loadAnalytics();
-      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); }
+      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); this.loadPaymentFee(); }
     },
 
     // ----- Data loaders -----
@@ -216,6 +217,30 @@ function adminApp() {
         const r = await fetch("/api/health");
         this.systemInfo = await r.json();
       } catch {}
+    },
+
+    async loadPaymentFee() {
+      try {
+        const f = await this.api("GET", "/settings/payment-fee");
+        this.payFee.enabled = !!f.enabled;
+        this.payFee.pct = Math.round((Number(f.rate) || 0) * 1000) / 10; // fracción → % (0.035 → 3.5)
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+    async savePaymentFee() {
+      if (this.payFee.saving) return;
+      const pct = Number(this.payFee.pct);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) { this.toast("Porcentaje inválido (0–100)", "error"); return; }
+      this.payFee.saving = true;
+      try {
+        const f = await this.api("PATCH", "/settings/payment-fee", { rate: pct / 100, enabled: !!this.payFee.enabled });
+        this.payFee.enabled = !!f.enabled;
+        this.payFee.pct = Math.round((Number(f.rate) || 0) * 1000) / 10;
+        this.toast("Comisión guardada ✓", "success");
+      } catch (err) {
+        this.toast(err.message, "error");
+      } finally {
+        this.payFee.saving = false;
+      }
     },
 
     // ----- Analítica -----

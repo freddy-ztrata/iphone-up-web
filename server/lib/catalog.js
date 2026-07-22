@@ -204,6 +204,8 @@ window.FAQS = ${JSON.stringify(extras.FAQS, null, 2)};
 
 window.TRADEIN_PRICES = ${JSON.stringify(extras.TRADEIN_PRICES, null, 2)};
 
+window.PAY_FEE = ${JSON.stringify(require("./settings").getPaymentFee())};
+
 window.fmtCLP = (n) => "$" + n.toLocaleString("es-CL");
 
 window.cartStore = {

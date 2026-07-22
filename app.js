@@ -6,9 +6,10 @@ const STATS       = window.STATS;
 const FAQS        = window.FAQS;
 const fmtCLP      = window.fmtCLP;
 
-// Comisión del medio de pago (3,5%) — se desglosa y se suma al total, siempre activa.
-const PAY_FEE_RATE = 0.035;
-const payFee = (subtotal) => Math.round((Number(subtotal) || 0) * PAY_FEE_RATE);
+// Comisión del medio de pago — configurable/desactivable desde el admin (window.PAY_FEE).
+const PAY_FEE = window.PAY_FEE || { rate: 0.035, enabled: true };
+const fmtPct = (r) => (r * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 }) + "%";
+const payFee = (subtotal) => PAY_FEE.enabled ? Math.round((Number(subtotal) || 0) * PAY_FEE.rate) : 0;
 
 // ---------- State ----------
 const state = {
@@ -172,6 +173,8 @@ function renderCart() {
   const subtotal = state.cart.reduce((a, v) => a + (Number(v.price) || 0), 0);
   const fee = payFee(subtotal);
   const setMoney = (sel, n) => { const e = $(sel); if (e) e.textContent = fmtCLP(n); };
+  const feeRow = $("#cart-commission-row"); if (feeRow) feeRow.style.display = PAY_FEE.enabled ? "" : "none";
+  const feePct = $("#cart-fee-pct"); if (feePct) feePct.textContent = fmtPct(PAY_FEE.rate);
   if (state.cart.length === 0) {
     list.appendChild(el("p", { class: "cart-empty" }, "Tu carro está vacío."));
     setMoney("#cart-subtotal", 0); setMoney("#cart-commission", 0); setMoney("#cart-total", 0);

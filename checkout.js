@@ -14,8 +14,9 @@
 const $ = sel => document.querySelector(sel);
 const fmt = window.fmtCLP || (n => "$" + Number(n).toLocaleString("es-CL"));
 
-// Comisión del medio de pago (3,5%) — se desglosa y se suma al total, siempre activa.
-const PAY_FEE_RATE = 0.035;
+// Comisión del medio de pago — configurable/desactivable desde el admin (window.PAY_FEE).
+const PAY_FEE = window.PAY_FEE || { rate: 0.035, enabled: true };
+const fmtPct = (r) => (r * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 }) + "%";
 
 const state = {
   items: [],
@@ -41,7 +42,7 @@ function calcSubtotal() {
 }
 
 function calcCommission() {
-  return Math.round(calcSubtotal() * PAY_FEE_RATE);
+  return PAY_FEE.enabled ? Math.round(calcSubtotal() * PAY_FEE.rate) : 0;
 }
 
 function calcTotal() {
@@ -70,6 +71,8 @@ function renderItems() {
 
 function renderTotals() {
   $("#co-subtotal").textContent = fmt(calcSubtotal());
+  const feeRow = $("#co-commission-row"); if (feeRow) feeRow.style.display = PAY_FEE.enabled ? "" : "none";
+  const feePct = $("#co-fee-pct"); if (feePct) feePct.textContent = fmtPct(PAY_FEE.rate);
   const comm = $("#co-commission");
   if (comm) comm.textContent = fmt(calcCommission());
   $("#co-ship-cost").textContent = !state.selectedShip ? "—" : (state.selectedShip.code === "PICKUP" ? "Retiro en tienda" : "Por pagar");

@@ -487,6 +487,21 @@
         </div>
 
         <div x-show="settingsTab === 'info'">
+          <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px;max-width:520px">
+            <h3 class="ac-an-card-title">Comisión medio de pago</h3>
+            <p class="ac-page-sub" style="margin:0 0 14px">Recargo que se suma al total del cliente, desglosado en el carrito, el checkout y Mercado Pago.</p>
+            <label class="ac-edit-checkbox" style="margin-bottom:14px">
+              <input type="checkbox" x-model="payFee.enabled" />
+              <span x-text="payFee.enabled ? 'Activada' : 'Desactivada'"></span>
+            </label>
+            <div class="ac-edit-field" style="max-width:220px" :style="payFee.enabled ? '' : 'opacity:.5'">
+              <span>Porcentaje (%)</span>
+              <input type="number" step="0.1" min="0" max="100" x-model.number="payFee.pct" :disabled="!payFee.enabled" />
+            </div>
+            <div style="margin-top:16px">
+              <button class="ac-btn-primary" @click="savePaymentFee()" :disabled="payFee.saving" x-text="payFee.saving ? 'Guardando…' : 'Guardar comisión'"></button>
+            </div>
+          </div>
           <pre class="ac-system-info" x-text="systemInfo ? JSON.stringify(systemInfo, null, 2) : 'cargando…'"></pre>
         </div>
       </section>
