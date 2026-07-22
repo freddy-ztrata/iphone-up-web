@@ -12,7 +12,7 @@ Contact is **Instagram-only** (`@iphoneup.cl`). Phone numbers and WhatsApp butto
 
 ## Stack
 
-Frontend: Vanilla HTML + CSS + JS (sin bundler). Backend Node + Express (Node 20+, `fetch` global, SQLite via `better-sqlite3`). El admin "Neon Console" en `/admin` está hecho con Alpine.js 3 (CDN, sin build step).
+Frontend: Vanilla HTML + CSS + JS (sin bundler). Backend Node + Express (Node 20+, `fetch` global, SQLite via `better-sqlite3`). El admin "Neon Console" en `/admin` está hecho con Alpine.js 3 self-hosted en `assets/vendor/alpine.min.js` (sin build step, sin CDN).
 
 ```
 server/index.js              → Express + helmet + sessions + static serving
@@ -21,10 +21,11 @@ server/migrations/*.sql      → Schema versionado (001_initial.sql, ...)
 server/routes/mercadopago.js → /api/mercadopago/* (Checkout Pro + webhook firmado)
 server/routes/chilexpress.js → /api/chilexpress/* (geo + rating, con fallback)
 server/routes/orders.js      → /api/orders/:id (consulta pública)
-server/routes/admin/*.js     → /api/admin/* (auth, products, coupons, orders, users, audit, uploads, dashboard)
+server/routes/admin/*.js     → /api/admin/* (auth, products, coupons, orders, users, audit, uploads, dashboard, analytics, settings)
 server/middleware/auth.js    → requireAuth + requireRole
 server/lib/catalog.js        → buildCatalog() y buildDataJs() (genera /data.js desde DB)
 server/lib/catalog-extras.js → TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES (aún hardcoded)
+server/lib/settings.js       → get/set de la tabla `settings` (config editable del admin: comisión medio de pago)
 server/lib/users.js          → bcrypt + lookup + bootstrap del primer usuario
 server/lib/audit.js          → log de mutaciones (before/after JSON)
 server/lib/coupons.js        → validación y aplicación al carro
@@ -35,6 +36,7 @@ server/lib/mp-signature.js   → verify() HMAC del webhook MP
 server/lib/chilexpress.js    → Cliente API Chilexpress
 server/lib/shipping-fallback.js → Tarifas fijas por región cuando no hay API key
 admin.html / admin.css / admin.js → Single-page admin (Alpine.js 3)
+assets/vendor/alpine.min.js  → Alpine self-hosted (44 KB) — NO usar CDN (CSP lo bloquea)
 scripts/seed-from-datajs.js  → Migración inicial data.js → SQLite (corre al boot si DB vacía)
 scripts/create-user.js       → CLI: crear/resetear usuario admin
 Dockerfile                   → Node 20 alpine + VOLUME ["/data"]
@@ -84,6 +86,7 @@ En local default es `./data` (ver env `DATA_DIR`).
 | GET    | `/api/admin/audit-log`                     | Historial de mutaciones                    |
 | POST   | `/api/admin/uploads/image`                 | Sube imagen → WebP en `/data/uploads/`     |
 | GET    | `/api/admin/dashboard`                     | KPIs + sparkline + top productos + actividad |
+| GET/PATCH | `/api/admin/settings/payment-fee`       | Comisión medio de pago `{ rate, enabled }` (editable/desactivable) |
 
 ## Run locally
 
@@ -128,7 +131,7 @@ payment-success.html     → return URL: MP "approved"
 payment-failure.html     → return URL: MP "rejected/cancelled"
 payment-pending.html     → return URL: MP "pending" (cash/transfer)
 
-data.js     → window.CATALOG, TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES,
+data.js     → window.CATALOG, TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES, PAY_FEE,
               fmtCLP, cartStore (sessionStorage shim for cross-page cart)
 specs.js    → window.IPHONE_SPECS (per-line Apple specs + per-variant overrides),
               window.getSpecsFor(lineId, variantName) — merges line base with variant extras
@@ -201,7 +204,7 @@ cart drawer ─→ checkout.html
 payment-success.html ─→ GET /api/orders/:id (renders detail + Instagram CTA)
 ```
 
-The cart shape `{model, storage, price, sealed, phoneId, img}` is **the API contract** between frontend and backend — `server/routes/mercadopago.js` reads exactly these fields when building MP `items`. Adding a field to cart drawer ≠ free; the backend needs to know what to do with it.
+The cart shape `{model, storage, color, price, sealed, phoneId, img}` is **the API contract** between frontend and backend — `server/routes/mercadopago.js` reads exactly these fields when building MP `items` (`phoneId` = id de la línea, `model` = nombre del modelo). El backend además agrega, según config, un ítem de **comisión medio de pago**. Adding a field to cart drawer ≠ free; the backend needs to know what to do with it.
 
 Orders are persisted to `server/data/orders.json` (file-based, gitignored). On the webhook callback, `external_reference` matches the orderId we created — that's how MP's async notification finds the right local order to update.
 
@@ -247,7 +250,7 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 `/admin` carga `admin.html` que es un SPA single-file con Alpine.js. Misma estética Dark Neon Premium que el público. Login en `/admin/login` (mismo HTML, vista distinta vía `x-show`).
 
 **Capas de admin:**
-- **UI**: `admin.html` (markup + Alpine bindings) + `admin.css` (sistema visual) + `admin.js` (estado reactivo + fetch). Alpine carga de CDN — no hay build step.
+- **UI**: `admin.html` (markup + Alpine bindings) + `admin.css` (sistema visual) + `admin.js` (estado reactivo + fetch). Alpine se sirve desde `assets/vendor/alpine.min.js` (44 KB, self-hosted) — la CSP de helmet bloquea unpkg/cdnjs, así que **no volver a referenciar Alpine vía CDN**.
 - **API**: `server/routes/admin/*.js` montado en `/api/admin`. Middleware `requireAuth` redirige a login si no hay sesión válida.
 - **Sesiones**: `express-session` + `better-sqlite3-session-store`. Cookie httpOnly, Secure en prod, SameSite=Lax, 7 días.
 - **Audit**: toda mutación llama `audit.log(req, {action, entity_type, entity_id, before, after})`. Vista en Settings → Audit log.
@@ -260,7 +263,7 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 3. Stock — pivote modelos × storages
 4. Cupones — cards tipo ticket, CRUD completo
 5. Órdenes — lista filtrable + drawer con detalle + WhatsApp deep-link
-6. Settings — tabs Usuarios / Audit log / Sistema
+6. Settings — tabs Usuarios / Audit log / Sistema. La tab **Sistema** incluye la **Comisión medio de pago** (switch on/off + % editable → `PATCH /api/admin/settings/payment-fee`).
 
 **Atajos**: `⌘K` command palette, `G+P/O/S/C/D/U` navegación, `Esc` cerrar drawer/palette.
 
@@ -268,7 +271,9 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 
 ## Things to be careful with
 
-- **Don't change the cart shape** without updating `app.js`, `product.js`, `checkout.js` **and** `server/routes/mercadopago.js`. The schema `{model, storage, price, sealed, phoneId, img}` is the cross-page + cross-stack contract.
+- **Don't change the cart shape** without updating `app.js`, `product.js`, `checkout.js` **and** `server/routes/mercadopago.js`. The schema `{model, storage, color, price, sealed, phoneId, img}` is the cross-page + cross-stack contract (`phoneId` = id de la línea, `model` = nombre del modelo — NO los cambies a model_id/slug o se rompen cupones/stock/MP).
+- **Comisión medio de pago** (3,5% por default, **editable y desactivable** en admin → Ajustes → Sistema). Se guarda en `settings` (`server/lib/settings.js`), se expone como `window.PAY_FEE = {rate, enabled}` en `/data.js`, y se suma como ítem en la preference (`getPaymentFee()` en `server/routes/mercadopago.js`). Front y back calculan igual (`round(subtotal × rate)`) para que **lo mostrado = lo cobrado**. El desglose aparece en carrito, checkout y MP; si `enabled=false` la línea se oculta y el total = subtotal. Al cambiarla, `/data.js` cambia de ETag y el front la toma al recargar. Para configuración editable nueva, seguí este patrón (settings lib + ruta admin + `window.*` en buildDataJs), no hardcodees.
+- **Este repo vive en una carpeta de OneDrive** — la sincronización puede revertir/pisar ediciones locales (síntoma: avisos de "modified on disk", cambios que "desaparecen"). Los deploys leen el archivo local al momento del push (GitHub Git Data API), así que verificá en producción tras pushear; si un cambio no aparece, re-aplicá y re-pusheá.
 - **Don't trust prices from data.js if the user gives you new ones** — replace, never adjust algorithmically. The retail and trade-in prices come straight from the client.
 - **Don't commit `.env`** — está en `.gitignore`. Las credenciales reales viven solo en Dokploy.
 - **Don't add tests, lint configs, or CI** — there's no test runner and adding one would force a build dependency.
@@ -282,6 +287,9 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 - **No edites `data.js` físico** después de migrar a DB — el archivo queda como snapshot de respaldo pero la fuente de verdad es la DB. Edita desde el admin o vía `/api/admin/*`.
 - **El bootstrap user solo se crea si NO hay usuarios activos.** Después de tener al menos uno, las env vars `ADMIN_BOOTSTRAP_*` se ignoran. Para resetear, usa `npm run create-user`.
 - **Sessions persisten en la misma DB.** Logout invalida la sesión inmediatamente; cambiar `SESSION_SECRET` invalida TODAS las sesiones (forzar logout global).
+- **No poner `PRAGMA` en archivos de migración SQL.** El runner las envuelve en `BEGIN/COMMIT` y SQLite rechaza `PRAGMA synchronous` / `journal_mode` dentro de una transacción con `Safety level may not be changed inside a transaction`. Los PRAGMA de conexión se setean en `server/db.js` antes de correr migraciones. Las `.sql` solo deberían tener `CREATE TABLE / CREATE INDEX / INSERT`.
+- **CSP de helmet es estricta** (`server/index.js`). Si vas a agregar un script externo (otra CDN, otro pixel de analytics), tenés que agregar el origen a `scriptSrc` / `connectSrc` o el navegador lo bloquea silenciosamente. Síntoma típico: el admin queda en pantalla negra porque Alpine no carga y `x-cloak` nunca se remueve. Siempre que se pueda, preferir self-hostear (ver `assets/vendor/`).
+- **El navegador cachea agresivamente HTML/JS del admin** aunque el server envíe `Cache-Control: no-cache`. Después de cada deploy de cambios al frontend del admin, usar Ctrl+Shift+R (refresh duro) o ventana incógnita para verificar. Útil tener DevTools → Network → "Disable cache" durante desarrollo.
 
 ## Reference: design source
 
