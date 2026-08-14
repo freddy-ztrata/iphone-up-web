@@ -32,8 +32,10 @@ const SELECT_ALL_MODELS_FOR_PRODUCT = db.prepare(`
   WHERE product_id = ?
   ORDER BY position ASC, id ASC
 `);
+// `cost` solo se lee acá (rama admin). El SELECT público de arriba no lo toca,
+// así que el costo de adquisición nunca puede filtrarse a /data.js.
 const SELECT_ALL_VARIANTS_FOR_MODEL = db.prepare(`
-  SELECT id, model_id, storage, color, price, compare_at_price, stock, sku, position, is_active
+  SELECT id, model_id, storage, color, price, compare_at_price, cost, stock, sku, position, is_active
   FROM variants
   WHERE model_id = ?
   ORDER BY position ASC, id ASC
@@ -76,7 +78,13 @@ function buildCatalog(opts = {}) {
         if (v.color) storage.color = v.color;
         if (v.compare_at_price) storage.compare_at = v.compare_at_price;
         if (includeStock) storage.stock = v.stock;
-        if (includeIds) storage.variant_id = v.id;
+        if (includeIds) {
+          // Campos de gestión: solo para el admin (includeIds no se usa en la
+          // rama pública). `cost` es interno — nunca sale en /data.js.
+          storage.variant_id = v.id;
+          storage.sku = v.sku || "";
+          storage.cost = v.cost == null ? null : v.cost;
+        }
         if (includeInactive) storage.is_active = !!v.is_active;
         return storage;
       });
@@ -187,9 +195,9 @@ function buildDataJs() {
   // Excluimos del catálogo público los productos sin variantes vendibles (sin
   // modelos o con modelos sin storages) para no romper el render del frontend.
   const catalog = buildPublicCatalog();
-  // TESTIMONIALS/STATS/FAQS/TRADEIN_PRICES siguen "duras" por ahora — están en
-  // settings y pueden editarse desde admin más adelante. Para el MVP las
-  // dejamos hardcoded acá para no romper el frontend.
+  // TRADEIN_PRICES ya es editable desde el admin (tabla `settings`);
+  // catalog-extras queda como default de fábrica. TESTIMONIALS/STATS/FAQS
+  // siguen hardcodeados — son texto editorial, no operación diaria.
   const extras = require("./catalog-extras");
 
   const js = `// AUTOGENERADO — fuente de verdad en SQLite. NO EDITAR a mano.
@@ -202,7 +210,7 @@ window.STATS = ${JSON.stringify(extras.STATS, null, 2)};
 
 window.FAQS = ${JSON.stringify(extras.FAQS, null, 2)};
 
-window.TRADEIN_PRICES = ${JSON.stringify(extras.TRADEIN_PRICES, null, 2)};
+window.TRADEIN_PRICES = ${JSON.stringify(require("./settings").getTradeinPrices(), null, 2)};
 
 window.PAY_FEE = ${JSON.stringify(require("./settings").getPaymentFee())};
 

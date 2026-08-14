@@ -1,6 +1,11 @@
+// Cupones. Leer es para cualquier usuario logueado; crear/editar/borrar toca
+// directamente los ingresos, así que queda reservado a admin (un editor está
+// limitado a catálogo, stock y fulfillment).
+
 const express = require("express");
 const db = require("../../db");
 const audit = require("../../lib/audit");
+const { requireAdmin } = require("../../middleware/auth");
 
 const router = express.Router();
 
@@ -30,7 +35,7 @@ router.get("/", (_req, res) => {
   res.json({ coupons: LIST.all().map(c => ({ ...c, is_active: Boolean(c.is_active) })) });
 });
 
-router.post("/", (req, res) => {
+router.post("/", requireAdmin, (req, res) => {
   const { code, type, value, min_subtotal, max_uses, starts_at, ends_at, applies_to, is_active } = req.body || {};
   if (!code || !type || value == null) return res.status(400).json({ error: "code, type, value requeridos" });
   if (!["percent", "fixed"].includes(type)) return res.status(400).json({ error: "type inválido" });
@@ -54,11 +59,14 @@ router.post("/", (req, res) => {
   }
 });
 
-router.patch("/:id", (req, res) => {
+router.patch("/:id", requireAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   const before = SEL.get(id);
   if (!before) return res.status(404).json({ error: "No existe" });
   const { code, type, value, min_subtotal, max_uses, starts_at, ends_at, applies_to, is_active } = req.body || {};
+  if (type != null && !["percent", "fixed"].includes(type)) {
+    return res.status(400).json({ error: "type inválido" });
+  }
   UPDATE.run({
     id,
     code: code ? code.toUpperCase().trim() : null,
@@ -76,7 +84,7 @@ router.patch("/:id", (req, res) => {
   res.json(after);
 });
 
-router.delete("/:id", (req, res) => {
+router.delete("/:id", requireAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   const before = SEL.get(id);
   if (!before) return res.status(404).json({ error: "No existe" });
