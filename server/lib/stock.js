@@ -50,15 +50,46 @@ function listMovements(variant_id, limit = 50) {
   return SELECT_MOVEMENTS.all(variant_id, Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500));
 }
 
+// Resuelve la variante exacta de un item del carro.
+//
+// El COLOR es parte de la identidad de la variante desde la migración 005: dos
+// filas comparten (línea, modelo, capacidad) y solo difieren en color. Buscar
+// sin color y cortar con LIMIT 1 descontaba stock de un color al azar. Primero
+// intentamos el match exacto con color; recién si el item no trae color (carros
+// viejos en sessionStorage, órdenes creadas por el webhook desde MP) caemos al
+// match sin color.
+const FIND_VARIANT_WITH_COLOR = db.prepare(`
+  SELECT v.id FROM variants v
+  JOIN product_models m ON m.id = v.model_id
+  JOIN products p ON p.id = m.product_id
+  WHERE p.id = ? AND m.name = ? AND v.storage = ? AND v.color = ?
+  LIMIT 1
+`);
+const FIND_VARIANT_ANY_COLOR = db.prepare(`
+  SELECT v.id FROM variants v
+  JOIN product_models m ON m.id = v.model_id
+  JOIN products p ON p.id = m.product_id
+  WHERE p.id = ? AND m.name = ? AND v.storage = ?
+  ORDER BY v.is_active DESC, v.stock DESC, v.id ASC
+  LIMIT 1
+`);
+
+function findVariantForItem(item) {
+  // El item puede traer el variant_id resuelto (órdenes manuales del admin).
+  if (item.variant_id) {
+    const v = SELECT_VARIANT.get(item.variant_id);
+    if (v) return { id: v.id, exact: true };
+  }
+  if (item.color) {
+    const hit = FIND_VARIANT_WITH_COLOR.get(item.phoneId, item.model, item.storage, item.color);
+    if (hit) return { id: hit.id, exact: true };
+  }
+  const any = FIND_VARIANT_ANY_COLOR.get(item.phoneId, item.model, item.storage);
+  return any ? { id: any.id, exact: false } : null;
+}
+
 // Descuenta stock de todos los items de una orden aprobada (idempotente vía order_id).
 function commitOrderSale(order) {
-  const findVariant = db.prepare(`
-    SELECT v.id FROM variants v
-    JOIN product_models m ON m.id = v.model_id
-    JOIN products p ON p.id = m.product_id
-    WHERE p.id = ? AND m.name = ? AND v.storage = ?
-    LIMIT 1
-  `);
   const alreadyMoved = db.prepare(`
     SELECT COUNT(*) AS n FROM stock_movements WHERE order_id = ? AND reason = 'sale'
   `);
@@ -66,22 +97,28 @@ function commitOrderSale(order) {
   if (alreadyMoved.get(order.id).n > 0) return { skipped: true };
 
   const out = [];
+  const missing = [];
   for (const item of order.items || []) {
-    const variant = findVariant.get(item.phoneId, item.model, item.storage);
+    const variant = findVariantForItem(item);
     if (!variant) {
-      console.warn(`[stock] no se encontró variant para ${item.model} ${item.storage}`);
+      const label = `${item.model} ${item.storage}${item.color ? " " + item.color : ""}`;
+      console.warn(`[stock] no se encontró variant para ${label} (orden ${order.id})`);
+      missing.push(label);
       continue;
     }
+    const note = variant.exact
+      ? `Venta orden ${order.id}`
+      : `Venta orden ${order.id} — color sin match exacto, descontado del color con más stock`;
     adjust({
       variant_id: variant.id,
       delta: -Number(item.qty || 1),
       reason: "sale",
       order_id: order.id,
-      note: `Venta orden ${order.id}`,
+      note,
     });
     out.push(variant.id);
   }
-  return { skipped: false, updated: out };
+  return { skipped: false, updated: out, missing };
 }
 
-module.exports = { adjust, listMovements, commitOrderSale };
+module.exports = { adjust, listMovements, commitOrderSale, findVariantForItem };

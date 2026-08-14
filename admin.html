@@ -60,7 +60,7 @@
       <img src="assets/logo-mark.jpg" alt="UP" />
     </button>
     <nav class="ac-nav">
-      <template x-for="item in nav" :key="item.id">
+      <template x-for="item in visibleNav" :key="item.id">
         <button class="ac-nav-item"
                 :class="{ 'active': view === item.id }"
                 @click="goto(item.id)"
@@ -121,15 +121,17 @@
             </svg>
           </article>
           <article class="ac-kpi">
-            <div class="ac-kpi-label">Pendientes</div>
-            <div class="ac-kpi-value" x-text="dashboard?.pending ?? '—'"></div>
-            <div class="ac-kpi-meta">órdenes esperando</div>
+            <div class="ac-kpi-label">Por despachar</div>
+            <div class="ac-kpi-value" x-text="dashboard?.to_fulfill ?? '—'"></div>
+            <div class="ac-kpi-meta">
+              <a href="#" @click.prevent="orderQuery.status='approved'; orderQuery.fulfillment_status='unfulfilled'; goto('orders')">Ver cola →</a>
+            </div>
           </article>
           <article class="ac-kpi">
-            <div class="ac-kpi-label">Stock crítico</div>
-            <div class="ac-kpi-value" x-text="dashboard ? dashboard.critical_stock.length : '—'"></div>
+            <div class="ac-kpi-label">Pago pendiente</div>
+            <div class="ac-kpi-value" x-text="dashboard?.pending ?? '—'"></div>
             <div class="ac-kpi-meta">
-              <a href="#" @click.prevent="goto('stock')">Ver alertas →</a>
+              <a href="#" @click.prevent="orderQuery.status='pending'; orderQuery.fulfillment_status=''; goto('orders')">Ver órdenes →</a>
             </div>
           </article>
           <article class="ac-kpi">
@@ -138,6 +140,29 @@
             <div class="ac-kpi-meta" x-text="dashboard ? dashboard.sales.last30.count + ' órdenes' : ''"></div>
           </article>
         </div>
+
+        <!-- Stock crítico: accionable en el mismo lugar donde se ve la alerta -->
+        <article class="ac-panel ac-critical" x-show="dashboard?.critical_stock?.length">
+          <header class="ac-panel-head ac-panel-head-row">
+            <h3>Stock crítico</h3>
+            <span class="ac-panel-hint" x-text="(dashboard?.critical_stock?.length || 0) + ' variantes con 2 unidades o menos'"></span>
+          </header>
+          <div class="ac-critical-list">
+            <template x-for="row in dashboard?.critical_stock || []" :key="row.variant_id">
+              <div class="ac-critical-row">
+                <span class="ac-critical-line" x-text="'iPhone ' + row.line"></span>
+                <span class="ac-critical-name" x-text="criticalLabel(row)"></span>
+                <span class="ac-stock-pill" :class="{ zero: row.stock === 0, low: row.stock > 0 }" x-text="row.stock"></span>
+                <div class="ac-critical-actions">
+                  <button class="ac-icon-btn" @click="bumpCriticalStock(row, 1)" title="Sumar 1">＋</button>
+                  <button class="ac-icon-btn" @click="bumpCriticalStock(row, -1)" title="Restar 1" :disabled="row.stock === 0">−</button>
+                  <button class="ac-icon-btn" @click="openKardex(row)" title="Ver movimientos">☰</button>
+                  <button class="ac-icon-btn" @click="goto('catalog'); openProductEditor(row.product_id)" title="Editar producto">✎</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </article>
 
         <div class="ac-grid-2">
           <article class="ac-panel">
@@ -179,7 +204,12 @@
         <header class="ac-page-head">
           <div>
             <h1 class="ac-page-title">Analítica</h1>
-            <p class="ac-page-sub">Visitas en tiempo real, sesiones y ventas (últimos 30 días)</p>
+            <p class="ac-page-sub" x-text="'Visitas en tiempo real, sesiones y ventas · últimos ' + analytics.days + ' días'"></p>
+          </div>
+          <div class="ac-page-actions ac-range">
+            <template x-for="d in [7, 30, 90]" :key="d">
+              <button class="ac-range-btn" :class="{ active: analytics.days === d }" @click="setAnalyticsDays(d)" x-text="d + 'd'"></button>
+            </template>
           </div>
         </header>
 
@@ -208,6 +238,18 @@
           <p class="ac-empty" x-show="analytics.overview && !analytics.overview.perDay.length">Aún no hay visitas registradas. Apenas entren clientes a la web, aparecerán aquí.</p>
         </div>
 
+        <div class="ac-an-card">
+          <h3 class="ac-an-card-title">Ingresos por día</h3>
+          <div class="ac-an-bars">
+            <template x-for="(d, i) in (analytics.overview ? analytics.overview.salesPerDay : [])" :key="i">
+              <div class="ac-an-bar-wrap" :title="d.day + ': ' + fmtCLP(d.revenue) + ' · ' + d.orders + ' órdenes'">
+                <div class="ac-an-bar ac-an-bar-sales" :style="'height:' + salesBarH(d.revenue) + '%'"></div>
+              </div>
+            </template>
+          </div>
+          <p class="ac-empty" x-show="analytics.overview && !analytics.overview.salesPerDay.length">Sin ventas aprobadas en este período.</p>
+        </div>
+
         <div class="ac-an-grid">
           <div class="ac-an-card" style="margin:0">
             <h3 class="ac-an-card-title">Actividad en vivo</h3>
@@ -223,6 +265,16 @@
             </template>
             <p class="ac-empty" x-show="analytics.overview && !analytics.overview.topPages.length">Sin datos.</p>
           </div>
+          <div class="ac-an-card" style="margin:0">
+            <h3 class="ac-an-card-title">De dónde llegan</h3>
+            <template x-for="(r, i) in (analytics.overview ? analytics.overview.topReferrers : [])" :key="i">
+              <div class="ac-an-row">
+                <span class="ac-an-path" :title="r.referrer" x-text="referrerLabel(r.referrer)"></span>
+                <span class="ac-an-meta"><span x-text="r.sessions"></span> sesiones</span>
+              </div>
+            </template>
+            <p class="ac-empty" x-show="analytics.overview && !analytics.overview.topReferrers.length">Sin datos.</p>
+          </div>
         </div>
       </section>
 
@@ -233,7 +285,8 @@
             <p class="ac-page-sub" x-text="products.length + ' productos · ' + visibleVariantCount() + ' variantes'"></p>
           </div>
           <div class="ac-page-actions">
-            <button class="ac-btn-ghost" @click="bulkPriceOpen = true">↗ Ajuste masivo</button>
+            <button class="ac-btn-ghost" @click="exportInventory()" x-show="isAdmin">⬇ Exportar CSV</button>
+            <button class="ac-btn-ghost" @click="openBulkPrice()" x-show="isAdmin">↗ Ajuste masivo</button>
             <button class="ac-btn-primary" @click="newProduct()">+ Nuevo producto</button>
           </div>
         </header>
@@ -321,7 +374,7 @@
                               <button class="ac-stock-cell"
                                       :class="{ low: stockVariant(model, cap, color).stock > 0 && stockVariant(model, cap, color).stock <= 2, zero: stockVariant(model, cap, color).stock === 0, off: !stockVariant(model, cap, color).is_active }"
                                       :title="stockVariant(model, cap, color).is_active ? '' : 'Variante inactiva (oculta en la web)'"
-                                      @click="openStockPopover(stockVariant(model, cap, color))"
+                                      @click="openStockModal(stockVariant(model, cap, color), model.name + ' ' + cap + (color ? ' · ' + color : ''))"
                                       x-text="stockVariant(model, cap, color).stock"></button>
                             </template>
                             <template x-if="!stockVariant(model, cap, color)">
@@ -346,8 +399,9 @@
             <h1 class="ac-page-title">Cupones</h1>
             <p class="ac-page-sub" x-text="coupons.length + ' cupones'"></p>
           </div>
-          <button class="ac-btn-primary" @click="newCoupon()">+ Nuevo cupón</button>
+          <button class="ac-btn-primary" @click="openCouponEditor('create')" x-show="isAdmin">+ Nuevo cupón</button>
         </header>
+        <p class="ac-page-sub" x-show="!isAdmin" style="margin-bottom:16px">Solo un admin puede crear o modificar cupones.</p>
 
         <div class="ac-coupons-grid">
           <template x-for="c in coupons" :key="c.id">
@@ -363,8 +417,8 @@
                   <span x-text="couponValidityLabel(c)"></span>
                   <span x-show="c.max_uses != null">· <span x-text="c.used_count + '/' + c.max_uses"></span> usos</span>
                 </div>
-                <div class="ac-coupon-actions">
-                  <button class="ac-icon-btn" @click="editCoupon(c)" title="Editar">✎</button>
+                <div class="ac-coupon-actions" x-show="isAdmin">
+                  <button class="ac-icon-btn" @click="openCouponEditor('edit', c)" title="Editar">✎</button>
                   <button class="ac-icon-btn" @click="toggleCoupon(c)" :title="c.is_active ? 'Pausar' : 'Activar'">
                     <span x-text="c.is_active ? '⏸' : '▶'"></span>
                   </button>
@@ -384,26 +438,52 @@
         <header class="ac-page-head">
           <div>
             <h1 class="ac-page-title">Órdenes</h1>
-            <p class="ac-page-sub" x-text="orders.length + ' órdenes'"></p>
+            <p class="ac-page-sub">
+              <span x-text="orderPage.total"></span> órdenes<span x-show="orderFiltersActive"> con estos filtros</span> ·
+              mostrando <span x-text="orders.length"></span>
+            </p>
           </div>
           <div class="ac-page-actions">
-            <select class="ac-select" x-model="orderFilter" @change="loadOrders()">
-              <option value="">Todos los estados</option>
-              <option value="pending">Pendientes</option>
-              <option value="approved">Aprobados</option>
-              <option value="rejected">Rechazados</option>
-              <option value="cancelled">Cancelados</option>
-            </select>
+            <button class="ac-btn-ghost" @click="exportOrders()" x-show="isAdmin">⬇ Exportar CSV</button>
+            <button class="ac-btn-primary" @click="openManualOrder()">+ Venta manual</button>
           </div>
         </header>
 
-        <div class="ac-table ac-orders">
+        <div class="ac-filters">
+          <input class="ac-filter-search" type="search" placeholder="Buscar por orden, cliente, producto o tracking…"
+                 x-model="orderQuery.q" @input="searchOrdersDebounced()" />
+          <select class="ac-select" x-model="orderQuery.status" @change="loadOrders()">
+            <option value="">Pago: todos</option>
+            <template x-for="s in PAY_STATES" :key="s.id">
+              <option :value="s.id" x-text="'Pago: ' + s.label"></option>
+            </template>
+            <option value="in_process">Pago: en proceso</option>
+          </select>
+          <select class="ac-select" x-model="orderQuery.fulfillment_status" @change="loadOrders()">
+            <option value="">Envío: todos</option>
+            <template x-for="f in FULFILLMENTS" :key="f.id">
+              <option :value="f.id" x-text="'Envío: ' + f.label"></option>
+            </template>
+          </select>
+          <select class="ac-select" x-model="orderQuery.channel" @change="loadOrders()">
+            <option value="">Canal: todos</option>
+            <template x-for="c in CHANNELS" :key="c.id">
+              <option :value="c.id" x-text="'Canal: ' + c.label"></option>
+            </template>
+          </select>
+          <input class="ac-select ac-filter-date" type="date" x-model="orderQuery.from" @change="loadOrders()" title="Desde" />
+          <input class="ac-select ac-filter-date" type="date" x-model="orderQuery.to" @change="loadOrders()" title="Hasta" />
+          <button class="ac-btn-ghost ac-btn-sm" @click="resetOrderFilters()" x-show="orderFiltersActive">Limpiar</button>
+        </div>
+
+        <div class="ac-table ac-orders" :class="{ loading: loadingOrders }">
           <div class="ac-table-head">
             <div class="ac-th ac-oc-ord">Orden</div>
             <div class="ac-th ac-oc-cli">Cliente</div>
             <div class="ac-th ac-oc-deliv">Entrega</div>
             <div class="ac-th ac-oc-total">Total</div>
-            <div class="ac-th ac-oc-state">Estado</div>
+            <div class="ac-th ac-oc-state">Pago</div>
+            <div class="ac-th ac-oc-fulfil">Envío</div>
             <div class="ac-th ac-oc-date">Fecha</div>
           </div>
           <template x-for="o in orders" :key="o.id">
@@ -419,19 +499,29 @@
               <div class="ac-td ac-oc-deliv">
                 <span class="ac-deliv-pill" :class="(o.delivery && o.delivery.method === 'pickup') ? 'is-pickup' : 'is-ship'"
                       x-text="o.delivery ? (o.delivery.method === 'pickup' ? '🏬 Retiro' : '🚚 Despacho') : '—'"></span>
+                <div class="ac-ord-sub" x-show="o.channel && o.channel !== 'online'" x-text="channelLabel(o.channel)"></div>
                 <div class="ac-ord-sub" x-show="o.delivery && o.delivery.method !== 'pickup' && o.delivery.county" x-text="o.delivery ? o.delivery.county : ''"></div>
               </div>
               <div class="ac-td ac-oc-total ac-mono ac-ord-total" x-text="fmtCLP(o.total)"></div>
               <div class="ac-td ac-oc-state">
-                <span class="ac-state-pill" :class="'state-' + o.status" x-text="o.status"></span>
+                <span class="ac-state-pill" :class="'state-' + o.status" x-text="payStateLabel(o.status)"></span>
+              </div>
+              <div class="ac-td ac-oc-fulfil">
+                <span class="ac-fulfil-pill" :class="'fulfil-' + o.fulfillment_status" x-text="fulfillmentLabel(o.fulfillment_status)"></span>
+                <div class="ac-ord-sub ac-mono" x-show="o.tracking_code" x-text="o.tracking_code"></div>
               </div>
               <div class="ac-td ac-oc-date">
                 <div x-text="timeAgo(o.created_at)"></div>
-                <div class="ac-ord-sub" x-text="(o.created_at || '').slice(0, 16).replace('T', ' ')"></div>
+                <div class="ac-ord-sub" x-text="fmtDateTime(o.created_at)"></div>
               </div>
             </div>
           </template>
-          <p class="ac-empty" x-show="orders.length === 0">No hay órdenes con este filtro.</p>
+          <p class="ac-empty" x-show="!loadingOrders && orders.length === 0">No hay órdenes con este filtro.</p>
+        </div>
+
+        <div class="ac-pager" x-show="orderPage.hasMore">
+          <button class="ac-btn-ghost" @click="loadMoreOrders()" :disabled="loadingOrders"
+                  x-text="loadingOrders ? 'Cargando…' : 'Cargar más (' + (orderPage.total - orders.length) + ' restantes)'"></button>
         </div>
       </section>
 
@@ -502,6 +592,22 @@
               <button class="ac-btn-primary" @click="savePaymentFee()" :disabled="payFee.saving" x-text="payFee.saving ? 'Guardando…' : 'Guardar comisión'"></button>
             </div>
           </div>
+
+          <div class="ac-setting-card">
+            <h3 class="ac-an-card-title">Precios de recompra (vende tu iPhone)</h3>
+            <p class="ac-page-sub" style="margin:0 0 12px">
+              Lo máximo que la tienda paga por cada modelo/capacidad. Se publica en el home al guardar.
+              <span x-show="tradein.isDefault" class="ac-role-pill" style="margin-left:6px">valores de fábrica</span>
+            </p>
+            <textarea class="ac-json-editor" x-model="tradein.text" spellcheck="false"
+                      placeholder='{ "iPhone 14 Pro": { "128GB": 400000 } }'></textarea>
+            <p class="ac-edit-hint">Formato: modelo → capacidad → precio en pesos. Las capacidades con precio 0 se descartan.</p>
+            <div class="ac-setting-actions">
+              <button class="ac-btn-primary" @click="saveTradein()" :disabled="tradein.saving" x-text="tradein.saving ? 'Guardando…' : 'Guardar precios'"></button>
+              <button class="ac-btn-ghost" @click="resetTradein()" x-show="!tradein.isDefault">Volver a los de fábrica</button>
+            </div>
+          </div>
+
           <pre class="ac-system-info" x-text="systemInfo ? JSON.stringify(systemInfo, null, 2) : 'cargando…'"></pre>
         </div>
       </section>
@@ -509,14 +615,139 @@
     </main>
   </div>
 
-  <!-- ========== DRAWER (detalle de producto / cupón / orden) ========== -->
-  <div class="ac-drawer-overlay" x-show="drawer.open" @click="closeDrawer()"></div>
-  <aside class="ac-drawer" :class="{ open: drawer.open }">
+  <!-- ========== DRAWER DE ORDEN ==========
+       Todo se pinta con x-text / :attr y NUNCA con x-html: el nombre, la
+       dirección y las notas los escribe el comprador en el checkout público.
+       Con x-html, un "<img src=x onerror=...>" en el campo nombre corría con
+       la sesión del admin. -->
+  <div class="ac-drawer-overlay" x-show="orderDrawer.open" @click="closeOrderDrawer()" x-cloak></div>
+  <aside class="ac-drawer ac-drawer-order" :class="{ open: orderDrawer.open }">
     <header class="ac-drawer-head">
-      <h2 x-text="drawer.title"></h2>
-      <button class="ac-icon-btn" @click="closeDrawer()">✕</button>
+      <h2 class="ac-mono" x-text="orderDrawer.order ? orderDrawer.order.id : 'Orden'"></h2>
+      <button class="ac-icon-btn" @click="closeOrderDrawer()">✕</button>
     </header>
-    <div class="ac-drawer-body" x-html="drawer.html"></div>
+
+    <p class="ac-empty" x-show="orderDrawer.loading">Cargando orden…</p>
+
+    <template x-if="orderDrawer.order && !orderDrawer.loading">
+      <div class="ac-order-wrap">
+        <div class="ac-tabs ac-tabs-drawer">
+          <button class="ac-tab" :class="{ active: orderDrawer.tab === 'detalle' }" @click="orderDrawer.tab = 'detalle'">Detalle</button>
+          <button class="ac-tab" :class="{ active: orderDrawer.tab === 'envio' }" @click="orderDrawer.tab = 'envio'">Preparación</button>
+          <button class="ac-tab" :class="{ active: orderDrawer.tab === 'historial' }" @click="orderDrawer.tab = 'historial'; loadOrderHistory()">Historial</button>
+        </div>
+
+        <!-- ---- DETALLE ---- -->
+        <div class="ac-drawer-body" x-show="orderDrawer.tab === 'detalle'">
+          <div class="ac-order-pills">
+            <span class="ac-state-pill" :class="'state-' + orderDrawer.order.status" x-text="payStateLabel(orderDrawer.order.status)"></span>
+            <span class="ac-fulfil-pill" :class="'fulfil-' + orderDrawer.order.fulfillment_status" x-text="fulfillmentLabel(orderDrawer.order.fulfillment_status)"></span>
+            <span class="ac-role-pill" x-text="channelLabel(orderDrawer.order.channel)"></span>
+            <span class="ac-role-pill" x-show="orderDrawer.order.payment_method" x-text="payMethodLabel(orderDrawer.order.payment_method)"></span>
+          </div>
+          <p class="ac-order-date" x-text="fmtDateTime(orderDrawer.order.created_at)"></p>
+
+          <h3 class="ac-order-sec">Cliente</h3>
+          <div class="ac-order-kv">
+            <span>Nombre</span><strong x-text="orderDrawer.order.buyer?.name || '—'"></strong>
+            <span x-show="orderDrawer.order.buyer?.email">Email</span><strong x-show="orderDrawer.order.buyer?.email" x-text="orderDrawer.order.buyer?.email"></strong>
+            <span x-show="orderDrawer.order.buyer?.phone">Teléfono</span><strong x-show="orderDrawer.order.buyer?.phone" x-text="orderDrawer.order.buyer?.phone"></strong>
+            <span x-show="orderDrawer.order.buyer?.rut">RUT</span><strong x-show="orderDrawer.order.buyer?.rut" x-text="orderDrawer.order.buyer?.rut"></strong>
+            <span x-show="orderDrawer.order.buyer?.instagram">Instagram</span><strong x-show="orderDrawer.order.buyer?.instagram" x-text="orderDrawer.order.buyer?.instagram"></strong>
+          </div>
+
+          <h3 class="ac-order-sec" x-text="orderIsPickup ? 'Retiro en tienda' : 'Envío'"></h3>
+          <p class="ac-order-addr" x-text="orderAddressLine"></p>
+
+          <h3 class="ac-order-sec">Productos</h3>
+          <template x-for="(i, idx) in orderDrawer.order.items || []" :key="idx">
+            <div class="ac-order-item">
+              <span>
+                <span x-text="i.model"></span>
+                <span x-text="i.storage ? ' ' + i.storage : ''"></span>
+                <span class="ac-order-item-color" x-show="i.color" x-text="' · ' + i.color"></span>
+                <span class="ac-order-item-qty" x-show="(i.qty || 1) > 1" x-text="' ×' + i.qty"></span>
+              </span>
+              <span class="ac-mono" x-text="fmtCLP(i.price * (i.qty || 1))"></span>
+            </div>
+          </template>
+
+          <div class="ac-order-item" x-show="orderDrawer.order.coupon_code">
+            <span>Cupón <span class="ac-mono" x-text="orderDrawer.order.coupon_code"></span></span><span></span>
+          </div>
+          <div class="ac-order-item">
+            <span>Envío</span>
+            <span class="ac-mono" x-text="orderIsPickup ? 'Retiro en tienda' : (Number(orderDrawer.order.shipping_cost) > 0 ? fmtCLP(orderDrawer.order.shipping_cost) : 'Por pagar')"></span>
+          </div>
+          <div class="ac-order-total">
+            <span>Total</span><span class="ac-mono" x-text="fmtCLP(orderDrawer.order.total)"></span>
+          </div>
+
+          <div class="ac-order-cta">
+            <a class="ac-btn-ghost" x-show="whatsappLink(orderDrawer.order.buyer?.phone)"
+               :href="whatsappLink(orderDrawer.order.buyer?.phone)" target="_blank" rel="noopener">Contactar por WhatsApp</a>
+            <button class="ac-btn-danger" x-show="isAdmin" @click="deleteOrder(orderDrawer.order.id)">Eliminar orden</button>
+          </div>
+        </div>
+
+        <!-- ---- PREPARACIÓN / ENVÍO ---- -->
+        <div class="ac-drawer-body" x-show="orderDrawer.tab === 'envio'">
+          <div class="ac-edit-field">
+            <span>Estado de preparación</span>
+            <select class="ac-select" x-model="orderDrawer.form.fulfillment_status">
+              <template x-for="f in FULFILLMENTS" :key="f.id">
+                <option :value="f.id" x-text="f.label"></option>
+              </template>
+            </select>
+          </div>
+          <div class="ac-edit-grid" style="margin-top:14px">
+            <label class="ac-edit-field"><span>Courier</span>
+              <input x-model="orderDrawer.form.tracking_carrier" placeholder="Chilexpress" />
+            </label>
+            <label class="ac-edit-field"><span>N° de seguimiento</span>
+              <input class="ac-mono" x-model="orderDrawer.form.tracking_code" placeholder="991234567890" />
+            </label>
+          </div>
+          <label class="ac-edit-field" style="margin-top:14px"><span>Nota interna</span>
+            <textarea class="ac-textarea" rows="3" x-model="orderDrawer.form.admin_notes"
+                      placeholder="Visible solo para el equipo"></textarea>
+          </label>
+
+          <div class="ac-edit-danger" x-show="isAdmin">
+            <div class="ac-edit-field">
+              <span>Estado de pago (forzar a mano)</span>
+              <select class="ac-select" x-model="orderDrawer.form.status">
+                <template x-for="s in PAY_STATES" :key="s.id">
+                  <option :value="s.id" x-text="s.label"></option>
+                </template>
+              </select>
+            </div>
+            <p class="ac-edit-hint">Normalmente lo escribe Mercado Pago. Cambialo solo para corregir una venta manual o un pago fuera de la web.</p>
+          </div>
+
+          <div class="ac-order-cta">
+            <button class="ac-btn-primary" @click="saveOrderFulfillment()" :disabled="orderDrawer.saving"
+                    x-text="orderDrawer.saving ? 'Guardando…' : 'Guardar cambios'"></button>
+          </div>
+        </div>
+
+        <!-- ---- HISTORIAL ---- -->
+        <div class="ac-drawer-body" x-show="orderDrawer.tab === 'historial'">
+          <template x-for="e in orderDrawer.history" :key="e.id">
+            <div class="ac-hist-row">
+              <div class="ac-hist-time" x-text="fmtDateTime(e.created_at)"></div>
+              <div>
+                <strong x-text="e.user_name || e.user_email || 'Sistema'"></strong>
+                <div class="ac-hist-text" x-text="historySummary(e)"></div>
+              </div>
+            </div>
+          </template>
+          <p class="ac-empty" x-show="orderDrawer.historyLoaded && !orderDrawer.history.length">
+            Sin cambios registrados todavía.
+          </p>
+        </div>
+      </div>
+    </template>
   </aside>
 
   <!-- ========== COMMAND PALETTE ========== -->
@@ -640,20 +871,34 @@
                     <span class="ac-edit-size-meta" x-text="colorsOfSize(model, size).length + ' color' + (colorsOfSize(model, size).length === 1 ? '' : 'es')"></span>
                     <button class="ac-icon-btn" @click="removeSize(model, size)" title="Eliminar capacidad">🗑</button>
                   </div>
-                  <table class="ac-edit-variants">
-                    <thead><tr><th>Color</th><th>Precio</th><th>Stock</th><th>Activo</th><th></th></tr></thead>
-                    <tbody>
-                      <template x-for="st in colorsOfSize(model, size)" :key="st.variant_id ?? st._k">
-                        <tr :class="{ 'ac-var-off': !st.is_active }">
-                          <td><input x-model="st.color" placeholder="Color" /></td>
-                          <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
-                          <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
-                          <td style="text-align:center"><input type="checkbox" x-model="st.is_active" /></td>
-                          <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar color">🗑</button></td>
-                        </tr>
-                      </template>
-                    </tbody>
-                  </table>
+                  <div class="ac-edit-variants-scroll">
+                    <table class="ac-edit-variants">
+                      <thead><tr>
+                        <th>Color</th><th>Precio</th><th>Costo</th><th>Margen</th>
+                        <th>Stock</th><th>SKU</th><th>Activo</th><th></th>
+                      </tr></thead>
+                      <tbody>
+                        <template x-for="st in colorsOfSize(model, size)" :key="st.variant_id ?? st._k">
+                          <tr :class="{ 'ac-var-off': !st.is_active }">
+                            <td><input x-model="st.color" placeholder="Color" /></td>
+                            <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
+                            <!-- El costo es interno: nunca sale en /data.js, solo alimenta el margen y el CSV. -->
+                            <td><input type="number" class="ac-mono" x-model="st.cost" placeholder="—" /></td>
+                            <td class="ac-var-margin">
+                              <span x-show="variantMargin(st)"
+                                    :class="variantMargin(st) && variantMargin(st).abs < 0 ? 'ac-bulk-down' : ''"
+                                    x-text="variantMargin(st) ? variantMargin(st).pct + '%' : ''"></span>
+                              <span x-show="!variantMargin(st)" class="ac-var-margin-na">—</span>
+                            </td>
+                            <td><input type="number" class="ac-mono" x-model.number="st.stock" /></td>
+                            <td><input class="ac-mono" x-model="st.sku" placeholder="—" /></td>
+                            <td style="text-align:center"><input type="checkbox" x-model="st.is_active" /></td>
+                            <td><button class="ac-icon-btn" @click="removeVariantDraft(model, st)" title="Eliminar color">🗑</button></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
                   <button class="ac-btn-ghost ac-btn-sm" @click="addColorToSize(model, size)">+ Color</button>
                 </div>
               </template>
@@ -712,6 +957,308 @@
         <button class="ac-btn-primary" @click="saveUser()" :disabled="userEditor.saving" x-text="userEditor.saving ? 'Guardando…' : 'Guardar'"></button>
       </footer>
     </div>
+  </div>
+
+  <!-- ========== MODAL DE CUPÓN (crear + editar) ========== -->
+  <div class="ac-modal-overlay" x-show="couponEditor" @click.self="couponEditor = null" x-cloak>
+    <template x-if="couponEditor">
+      <div class="ac-modal">
+        <header class="ac-modal-head">
+          <h2 x-text="couponEditor.mode === 'create' ? 'Nuevo cupón' : 'Editar cupón'"></h2>
+          <button class="ac-icon-btn" @click="couponEditor = null">✕</button>
+        </header>
+        <div class="ac-modal-body">
+          <label class="ac-edit-field"><span>Código</span>
+            <input class="ac-mono" x-model="couponEditor.code" style="text-transform:uppercase" placeholder="BLACKFRIDAY30" />
+          </label>
+          <div class="ac-edit-grid">
+            <div class="ac-edit-field"><span>Tipo</span>
+              <select class="ac-select" x-model="couponEditor.type">
+                <option value="percent">Porcentaje (%)</option>
+                <option value="fixed">Monto fijo ($)</option>
+              </select>
+            </div>
+            <label class="ac-edit-field"><span x-text="couponEditor.type === 'percent' ? 'Valor (%)' : 'Valor ($)'"></span>
+              <input type="number" min="1" x-model.number="couponEditor.value" />
+            </label>
+          </div>
+          <div class="ac-edit-grid">
+            <label class="ac-edit-field"><span>Subtotal mínimo</span>
+              <input type="number" min="0" x-model="couponEditor.min_subtotal" placeholder="Sin mínimo" />
+            </label>
+            <label class="ac-edit-field"><span>Tope de usos</span>
+              <input type="number" min="1" x-model="couponEditor.max_uses" placeholder="Ilimitado" />
+            </label>
+          </div>
+          <div class="ac-edit-grid">
+            <label class="ac-edit-field"><span>Vigente desde</span>
+              <input type="datetime-local" x-model="couponEditor.starts_at" />
+            </label>
+            <label class="ac-edit-field"><span>Vigente hasta</span>
+              <input type="datetime-local" x-model="couponEditor.ends_at" />
+            </label>
+          </div>
+          <label class="ac-edit-checkbox">
+            <input type="checkbox" x-model="couponEditor.is_active" /><span>Cupón activo</span>
+          </label>
+          <p class="ac-edit-hint" x-show="couponEditor.mode === 'edit'"
+             x-text="'Usos registrados: ' + couponEditor.used_count"></p>
+        </div>
+        <footer class="ac-modal-foot">
+          <button class="ac-btn-ghost" @click="couponEditor = null">Cancelar</button>
+          <button class="ac-btn-primary" @click="saveCoupon()" :disabled="couponEditor.saving"
+                  x-text="couponEditor.saving ? 'Guardando…' : 'Guardar'"></button>
+        </footer>
+      </div>
+    </template>
+  </div>
+
+  <!-- ========== MODAL DE VENTA MANUAL ========== -->
+  <div class="ac-modal-overlay" x-show="manualOrder" @click.self="manualOrder = null" x-cloak>
+    <template x-if="manualOrder">
+      <div class="ac-modal ac-modal-lg">
+        <header class="ac-modal-head">
+          <h2>Registrar venta manual</h2>
+          <button class="ac-icon-btn" @click="manualOrder = null">✕</button>
+        </header>
+        <div class="ac-modal-body">
+          <p class="ac-edit-hint" style="margin:0">
+            Para ventas en tienda, por Instagram o por transferencia. Descuenta stock igual que una compra web.
+          </p>
+
+          <div class="ac-edit-field ac-manual-search">
+            <span>Productos</span>
+            <input x-model="manualOrder.search" placeholder="Buscar modelo, capacidad, color o SKU…" />
+            <div class="ac-manual-results" x-show="manualSearchResults.length">
+              <template x-for="v in manualSearchResults" :key="v.variant_id">
+                <button class="ac-manual-result" @click="manualAddItem(v)">
+                  <span x-text="v.label"></span>
+                  <span class="ac-manual-result-meta">
+                    <span class="ac-mono" x-text="fmtCLP(v.price)"></span>
+                    <span class="ac-stock-pill" :class="{ zero: v.stock === 0 }" x-text="v.stock"></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+            <p class="ac-edit-hint" x-show="manualOrder.search && !manualSearchResults.length">Nada coincide.</p>
+          </div>
+
+          <table class="ac-manual-items" x-show="manualOrder.items.length">
+            <thead><tr><th>Producto</th><th>Cant.</th><th>Precio unit.</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="it in manualOrder.items" :key="it.variant_id">
+                <tr :class="{ 'ac-var-off': it.qty > it.stock }">
+                  <td>
+                    <span x-text="it.label"></span>
+                    <div class="ac-edit-hint" x-show="it.qty > it.stock" x-text="'Stock disponible: ' + it.stock"></div>
+                  </td>
+                  <td><input type="number" min="1" class="ac-mono" x-model.number="it.qty" /></td>
+                  <td><input type="number" min="0" class="ac-mono" x-model.number="it.price" /></td>
+                  <td><button class="ac-icon-btn" @click="manualRemoveItem(it)" title="Quitar">🗑</button></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <div class="ac-edit-grid">
+            <label class="ac-edit-field"><span>Cliente</span>
+              <input x-model="manualOrder.buyer.name" placeholder="Nombre" />
+            </label>
+            <label class="ac-edit-field"><span>Instagram / teléfono</span>
+              <input x-model="manualOrder.buyer.instagram" placeholder="@cuenta" />
+            </label>
+            <label class="ac-edit-field"><span>Email</span>
+              <input type="email" x-model="manualOrder.buyer.email" placeholder="opcional" />
+            </label>
+            <label class="ac-edit-field"><span>RUT</span>
+              <input x-model="manualOrder.buyer.rut" placeholder="opcional" />
+            </label>
+          </div>
+
+          <div class="ac-edit-grid">
+            <div class="ac-edit-field"><span>Canal</span>
+              <select class="ac-select" x-model="manualOrder.channel">
+                <template x-for="c in CHANNELS.filter(c => c.id !== 'online')" :key="c.id">
+                  <option :value="c.id" x-text="c.label"></option>
+                </template>
+              </select>
+            </div>
+            <div class="ac-edit-field"><span>Medio de pago</span>
+              <select class="ac-select" x-model="manualOrder.payment_method">
+                <template x-for="m in PAY_METHODS" :key="m.id">
+                  <option :value="m.id" x-text="m.label"></option>
+                </template>
+              </select>
+            </div>
+            <label class="ac-edit-field"><span>Costo de envío</span>
+              <input type="number" min="0" class="ac-mono" x-model="manualOrder.shipping_cost" placeholder="0" />
+            </label>
+            <label class="ac-edit-field"><span>Descuento</span>
+              <input type="number" min="0" class="ac-mono" x-model="manualOrder.discount" placeholder="0" />
+            </label>
+            <div class="ac-edit-field"><span>Estado del pago</span>
+              <select class="ac-select" x-model="manualOrder.status">
+                <template x-for="s in PAY_STATES" :key="s.id">
+                  <option :value="s.id" x-text="s.label"></option>
+                </template>
+              </select>
+            </div>
+            <div class="ac-edit-field"><span>Estado de entrega</span>
+              <select class="ac-select" x-model="manualOrder.fulfillment_status">
+                <template x-for="f in FULFILLMENTS" :key="f.id">
+                  <option :value="f.id" x-text="f.label"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+
+          <label class="ac-edit-field"><span>Nota interna</span>
+            <textarea class="ac-textarea" rows="2" x-model="manualOrder.notes" placeholder="opcional"></textarea>
+          </label>
+
+          <p class="ac-edit-hint" x-show="manualOrder.status !== 'approved'">
+            El stock solo se descuenta cuando el pago queda en «Aprobado».
+          </p>
+
+          <div class="ac-manual-totals">
+            <div><span>Subtotal</span><span class="ac-mono" x-text="fmtCLP(manualTotals.subtotal)"></span></div>
+            <div x-show="manualTotals.shipping"><span>Envío</span><span class="ac-mono" x-text="fmtCLP(manualTotals.shipping)"></span></div>
+            <div x-show="manualTotals.discount"><span>Descuento</span><span class="ac-mono" x-text="'− ' + fmtCLP(manualTotals.discount)"></span></div>
+            <div class="ac-manual-total"><span>Total</span><span class="ac-mono" x-text="fmtCLP(manualTotals.total)"></span></div>
+          </div>
+        </div>
+        <footer class="ac-modal-foot">
+          <button class="ac-btn-ghost" @click="manualOrder = null">Cancelar</button>
+          <button class="ac-btn-primary" @click="saveManualOrder()" :disabled="manualOrder.saving || !manualOrder.items.length"
+                  x-text="manualOrder.saving ? 'Registrando…' : 'Registrar venta'"></button>
+        </footer>
+      </div>
+    </template>
+  </div>
+
+  <!-- ========== MODAL DE AJUSTE MASIVO DE PRECIOS ========== -->
+  <div class="ac-modal-overlay" x-show="bulkPrice.open" @click.self="closeBulkPrice()" x-cloak>
+    <div class="ac-modal ac-modal-lg">
+      <header class="ac-modal-head">
+        <h2>Ajuste masivo de precios</h2>
+        <button class="ac-icon-btn" @click="closeBulkPrice()">✕</button>
+      </header>
+      <div class="ac-modal-body">
+        <div class="ac-edit-field"><span>Alcance</span>
+          <select class="ac-select" x-model="bulkPrice.scope" @change="bulkPrice.preview = null">
+            <template x-for="o in bulkScopeOptions" :key="o.id">
+              <option :value="o.id" x-text="o.label"></option>
+            </template>
+          </select>
+        </div>
+        <div class="ac-edit-grid">
+          <div class="ac-edit-field"><span>Tipo</span>
+            <select class="ac-select" x-model="bulkPrice.type" @change="bulkPrice.preview = null">
+              <option value="percent">Porcentaje (%)</option>
+              <option value="fixed">Monto fijo ($)</option>
+            </select>
+          </div>
+          <label class="ac-edit-field"><span>Valor (negativo = bajar)</span>
+            <input type="number" class="ac-mono" x-model="bulkPrice.value" @input="bulkPrice.preview = null" placeholder="-10" />
+          </label>
+        </div>
+
+        <button class="ac-btn-ghost ac-btn-sm" @click="previewBulkPrice()" :disabled="bulkPrice.loading"
+                x-text="bulkPrice.loading ? 'Calculando…' : 'Ver vista previa'"></button>
+
+        <template x-if="bulkPrice.preview">
+          <div>
+            <p class="ac-edit-hint" x-text="bulkPrice.preview.affected + ' variantes cambiarían de precio. Nada se guardó todavía.'"></p>
+            <div class="ac-bulk-preview">
+              <table>
+                <thead><tr><th>Variante</th><th>Antes</th><th>Después</th></tr></thead>
+                <tbody>
+                  <template x-for="c in bulkPrice.preview.changes" :key="c.id">
+                    <tr>
+                      <td x-text="c.label"></td>
+                      <td class="ac-mono ac-bulk-from" x-text="fmtCLP(c.from)"></td>
+                      <td class="ac-mono" :class="c.to > c.from ? 'ac-bulk-up' : 'ac-bulk-down'" x-text="fmtCLP(c.to)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+
+        <div class="ac-bulk-undo" x-show="bulkPrice.lastBatch">
+          <span x-text="'Último ajuste aplicado: ' + (bulkPrice.lastBatch ? bulkPrice.lastBatch.affected : 0) + ' variantes'"></span>
+          <button class="ac-btn-ghost ac-btn-sm" @click="undoBulkPrice()">Deshacer</button>
+        </div>
+      </div>
+      <footer class="ac-modal-foot">
+        <button class="ac-btn-ghost" @click="closeBulkPrice()">Cerrar</button>
+        <button class="ac-btn-primary" @click="applyBulkPrice()" :disabled="!bulkPrice.preview || bulkPrice.applying"
+                x-text="bulkPrice.applying ? 'Aplicando…' : 'Aplicar cambios'"></button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ========== MODAL DE STOCK (ajuste + kardex) ========== -->
+  <div class="ac-modal-overlay" x-show="stockModal" @click.self="stockModal = null" x-cloak>
+    <template x-if="stockModal">
+      <div class="ac-modal">
+        <header class="ac-modal-head">
+          <h2 x-text="stockModal.label"></h2>
+          <button class="ac-icon-btn" @click="stockModal = null">✕</button>
+        </header>
+        <div class="ac-modal-body">
+          <div class="ac-edit-grid">
+            <label class="ac-edit-field"><span>Stock actual</span>
+              <input class="ac-mono" :value="stockModal.current" disabled />
+            </label>
+            <label class="ac-edit-field"><span>Nuevo stock</span>
+              <input type="number" min="0" class="ac-mono" x-model.number="stockModal.target"
+                     @keydown.enter.prevent="saveStockModal()" />
+            </label>
+          </div>
+          <div class="ac-edit-field"><span>Motivo</span>
+            <select class="ac-select" x-model="stockModal.reason">
+              <option value="manual">Ajuste manual</option>
+              <option value="return">Devolución</option>
+              <option value="adjust">Corrección de inventario</option>
+            </select>
+          </div>
+          <label class="ac-edit-field"><span>Nota</span>
+            <input x-model="stockModal.note" placeholder="opcional" />
+          </label>
+
+          <button class="ac-btn-ghost ac-btn-sm" @click="loadStockLog()" x-show="!stockModal.movements"
+                  x-text="stockModal.loadingLog ? 'Cargando…' : 'Ver movimientos'"></button>
+
+          <template x-if="stockModal.movements">
+            <div class="ac-kardex">
+              <template x-for="m in stockModal.movements" :key="m.id">
+                <div class="ac-kardex-row">
+                  <span class="ac-kardex-delta" :class="m.delta > 0 ? 'up' : 'down'"
+                        x-text="(m.delta > 0 ? '+' : '') + m.delta"></span>
+                  <div>
+                    <div x-text="kardexReason(m.reason)"></div>
+                    <div class="ac-kardex-meta">
+                      <span x-text="fmtDateTime(m.created_at)"></span>
+                      <span x-show="m.user_email" x-text="' · ' + m.user_email"></span>
+                      <span x-show="m.order_id" x-text="' · ' + m.order_id"></span>
+                    </div>
+                    <div class="ac-kardex-meta" x-show="m.note" x-text="m.note"></div>
+                  </div>
+                </div>
+              </template>
+              <p class="ac-empty" x-show="!stockModal.movements.length">Sin movimientos registrados.</p>
+            </div>
+          </template>
+        </div>
+        <footer class="ac-modal-foot">
+          <button class="ac-btn-ghost" @click="stockModal = null">Cancelar</button>
+          <button class="ac-btn-primary" @click="saveStockModal()" :disabled="stockModal.saving"
+                  x-text="stockModal.saving ? 'Guardando…' : 'Guardar stock'"></button>
+        </footer>
+      </div>
+    </template>
   </div>
 
   <!-- ========== CONFIRM PROPIO ========== -->

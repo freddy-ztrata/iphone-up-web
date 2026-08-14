@@ -74,6 +74,20 @@ function rowToOrder(row) {
   };
 }
 
+// Normaliza un timestamp al formato de SQLite ("YYYY-MM-DD HH:MM:SS", UTC).
+//
+// mercadopago.js pasa `new Date().toISOString()` y MP devuelve fechas con
+// offset ("2026-08-13T21:13:00.000-04:00"). Mezclar esos formatos con los
+// `datetime('now')` del resto del schema rompía el ORDER BY y los filtros por
+// fecha, que en SQLite son comparaciones de TEXTO. La migración 006 arregló las
+// filas viejas; esto evita seguir generando filas nuevas mal formateadas.
+function toSqliteDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+
 function saveOrder(order) {
   const params = {
     id: order.id,
@@ -88,7 +102,7 @@ function saveOrder(order) {
     mp_preference_id: order.mp?.preferenceId || null,
     mp_payment_id: order.mp?.paymentId || null,
     coupon_code: order.couponCode || null,
-    created_at: order.createdAt || null,
+    created_at: toSqliteDate(order.createdAt),
   };
   INSERT_OR_REPLACE.run(params);
   return getOrder(order.id);

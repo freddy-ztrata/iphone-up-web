@@ -1,16 +1,25 @@
 // Dashboard: KPIs y series para gráficos.
+//
+// Todos los agregados "por día" se calculan en hora de Santiago, no en UTC.
+// `date('now','localtime')` dependía de la TZ del contenedor (alpine corre en
+// UTC y no trae tzdata), así que "Ventas hoy" arrancaba 3–4 horas tarde. Ahora
+// el offset real viaja como modificador explícito — ver server/lib/tz.js.
 
 const express = require("express");
 const db = require("../../db");
+const tz = require("../../lib/tz");
 
 const router = express.Router();
 
 router.get("/", (_req, res) => {
+  const tzMod = tz.sqliteModifier();
+
   // Ventas hoy / 7d / 30d (suma de orders con status approved)
   const salesToday = db.prepare(`
     SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count
-    FROM orders WHERE status = 'approved' AND date(created_at) = date('now', 'localtime')
-  `).get();
+    FROM orders
+    WHERE status = 'approved' AND date(created_at, @tz) = date('now', @tz)
+  `).get({ tz: tzMod });
   const sales7 = db.prepare(`
     SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count
     FROM orders WHERE status = 'approved' AND created_at >= datetime('now', '-7 days')
@@ -20,14 +29,24 @@ router.get("/", (_req, res) => {
     FROM orders WHERE status = 'approved' AND created_at >= datetime('now', '-30 days')
   `).get();
 
-  // Órdenes pendientes
+  // Órdenes pendientes de PAGO
   const pending = db.prepare(`
     SELECT COUNT(*) AS n FROM orders WHERE status IN ('pending','in_process')
   `).get();
 
-  // Stock crítico (variants con stock <= 2 y is_active)
+  // Órdenes pagadas que aún no se despachan — la cola de trabajo real del día.
+  const toFulfill = db.prepare(`
+    SELECT COUNT(*) AS n FROM orders
+    WHERE status = 'approved' AND fulfillment_status IN ('unfulfilled','preparing')
+  `).get();
+
+  // Stock crítico (variants con stock <= 2 y is_active).
+  // Devolvemos variant_id/color/product_id para que el dashboard pueda ajustar
+  // el stock in-situ y linkear al producto (antes solo mostraba texto).
   const critical = db.prepare(`
-    SELECT v.id, v.storage, v.stock, m.name AS model, p.line, p.year
+    SELECT v.id AS variant_id, v.storage, v.color, v.stock, v.price,
+           m.id AS model_id, m.name AS model,
+           p.id AS product_id, p.line, p.year
     FROM variants v
     JOIN product_models m ON m.id = v.model_id
     JOIN products p ON p.id = m.product_id
@@ -36,14 +55,14 @@ router.get("/", (_req, res) => {
     LIMIT 20
   `).all();
 
-  // Sparkline: ventas por día últimos 30 días
+  // Sparkline: ventas por día últimos 30 días (agrupado en días de Santiago)
   const sparkline = db.prepare(`
-    SELECT date(created_at) AS day, COALESCE(SUM(total), 0) AS total
+    SELECT date(created_at, @tz) AS day, COALESCE(SUM(total), 0) AS total
     FROM orders
     WHERE status = 'approved' AND created_at >= datetime('now', '-30 days')
     GROUP BY day
     ORDER BY day ASC
-  `).all();
+  `).all({ tz: tzMod });
 
   // Top productos últimos 30 días (por order_items_json — aproximación)
   const topRaw = db.prepare(`
@@ -81,10 +100,12 @@ router.get("/", (_req, res) => {
       last30: sales30,
     },
     pending: pending.n,
+    to_fulfill: toFulfill.n,
     critical_stock: critical,
     sparkline,
     top_products: top,
     recent_activity: recent,
+    tz: { zone: tz.TZ, offsetMinutes: tz.offsetMinutes(), today: tz.today() },
   });
 });
 

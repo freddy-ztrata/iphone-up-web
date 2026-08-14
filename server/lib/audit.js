@@ -25,9 +25,11 @@ const SELECT_RECENT = db.prepare(`
   LIMIT @limit
 `);
 
+// Devuelve el id de la fila insertada (o null si falló). El ajuste masivo de
+// precios lo usa como "batch id" para poder deshacerse desde el after_json.
 function log(req, { action, entity_type, entity_id, before, after }) {
   try {
-    INSERT.run({
+    const r = INSERT.run({
       user_id: req.user ? req.user.id : null,
       action,
       entity_type,
@@ -37,10 +39,24 @@ function log(req, { action, entity_type, entity_id, before, after }) {
       ip: req.ip || req.connection?.remoteAddress || null,
       user_agent: req.get?.("user-agent") || null,
     });
+    return Number(r.lastInsertRowid);
   } catch (err) {
     // Nunca interrumpas la operación por una falla en audit; solo loguea.
     console.error("[audit] insert failed:", err.message);
+    return null;
   }
+}
+
+const SELECT_ONE = db.prepare(`SELECT * FROM audit_log WHERE id = ?`);
+
+function getEntry(id) {
+  const r = SELECT_ONE.get(id);
+  if (!r) return null;
+  return {
+    ...r,
+    before: r.before_json ? JSON.parse(r.before_json) : null,
+    after: r.after_json ? JSON.parse(r.after_json) : null,
+  };
 }
 
 function list({ user_id, entity_type, entity_id, limit = 200 } = {}) {
@@ -56,4 +72,4 @@ function list({ user_id, entity_type, entity_id, limit = 200 } = {}) {
   }));
 }
 
-module.exports = { log, list };
+module.exports = { log, list, getEntry };

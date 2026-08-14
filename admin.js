@@ -22,18 +22,67 @@ function adminApp() {
     analytics: { realtime: null, overview: null, days: 30 },
     systemInfo: null,
     payFee: { enabled: true, pct: 3.5, saving: false },
+    tradein: { text: "", isDefault: true, loading: false, saving: false },
     loadingProducts: false,
-    orderFilter: "",
 
-    drawer: { open: false, title: "", html: "" },
+    // Órdenes: filtros + paginación (el server pagina; nunca traemos las 500 de una).
+    orderQuery: { q: "", status: "", fulfillment_status: "", channel: "", from: "", to: "" },
+    orderPage: { total: 0, limit: 50, offset: 0, hasMore: false },
+    loadingOrders: false,
+
+    // Detalle de orden. Es markup Alpine, NO html interpolado: los datos del
+    // comprador (nombre, dirección, notas) son texto que escribe un tercero y
+    // antes se inyectaban con x-html — cualquier <img onerror> en el checkout
+    // se ejecutaba en la sesión del admin.
+    orderDrawer: {
+      open: false, loading: false, saving: false, tab: "detalle",
+      order: null, history: [], historyLoaded: false,
+      form: { fulfillment_status: "", tracking_code: "", tracking_carrier: "", admin_notes: "", status: "" },
+    },
+    manualOrder: null,
+    couponEditor: null,
+    bulkPrice: { open: false, scope: "all", type: "percent", value: "", preview: null, loading: false, applying: false, lastBatch: null },
+    // Ajuste de stock + kardex de la variante (null = cerrado).
+    stockModal: null,
+
     palette: { open: false, query: "", results: [], idx: 0 },
     toasts: [],
-    bulkPriceOpen: false,
     prodEditor: { open: false, draft: null, original: null, saving: false },
     userEditor: { open: false, mode: "create", id: null, email: "", name: "", role: "admin", password: "", is_active: true, saving: false },
     userRoleOpen: false,
     confirmBox: { open: false, message: "", _resolve: null },
     promptBox: { open: false, message: "", value: "", type: "text", _resolve: null },
+
+    // Catálogos de estados — mismos valores que valida el backend
+    // (server/routes/admin/orders.js). Si agregás uno allá, agrégalo acá.
+    FULFILLMENTS: [
+      { id: "unfulfilled", label: "Sin preparar" },
+      { id: "preparing",   label: "Preparando" },
+      { id: "shipped",     label: "Enviado" },
+      { id: "delivered",   label: "Entregado" },
+      { id: "cancelled",   label: "Cancelado" },
+    ],
+    PAY_STATES: [
+      { id: "pending",   label: "Pendiente" },
+      { id: "approved",  label: "Aprobado" },
+      { id: "rejected",  label: "Rechazado" },
+      { id: "cancelled", label: "Cancelado" },
+      { id: "refunded",  label: "Reembolsado" },
+    ],
+    CHANNELS: [
+      { id: "online",    label: "Web (Mercado Pago)" },
+      { id: "store",     label: "Tienda" },
+      { id: "instagram", label: "Instagram" },
+      { id: "transfer",  label: "Transferencia" },
+      { id: "cash",      label: "Efectivo" },
+    ],
+    PAY_METHODS: [
+      { id: "cash",        label: "Efectivo" },
+      { id: "transfer",    label: "Transferencia" },
+      { id: "card",        label: "Tarjeta / POS" },
+      { id: "mercadopago", label: "Mercado Pago" },
+      { id: "other",       label: "Otro" },
+    ],
 
     nav: [
       { id: "dashboard", label: "Dashboard", icon: "◐" },
@@ -68,10 +117,19 @@ function adminApp() {
 
     bindKeyboard() {
       window.addEventListener("keydown", (e) => {
-        // Esc siempre funciona (para cerrar palette/drawer)
+        // Esc cierra la capa más alta que esté abierta (los modales propios
+        // resuelven su promesa, así que no pueden cerrarse "a la fuerza").
         if (e.key === "Escape") {
-          if (this.palette.open) this.palette.open = false;
-          else if (this.drawer.open) this.closeDrawer();
+          if (this.confirmBox.open) this.confirmResolve(false);
+          else if (this.promptBox.open) this.promptResolve(false);
+          else if (this.palette.open) this.palette.open = false;
+          else if (this.stockModal) this.stockModal = null;
+          else if (this.couponEditor) this.couponEditor = null;
+          else if (this.manualOrder) this.manualOrder = null;
+          else if (this.bulkPrice.open) this.closeBulkPrice();
+          else if (this.userEditor.open) this.userEditor.open = false;
+          else if (this.orderDrawer.open) this.closeOrderDrawer();
+          else if (this.prodEditor.open) this.prodEditor.open = false;
           return;
         }
 
@@ -138,17 +196,29 @@ function adminApp() {
       this.session = null;
     },
 
+    // Rol efectivo. El backend ya devuelve 403 en todo lo sensible; esto es
+    // para no MOSTRAR botones que van a fallar (users, audit, settings,
+    // eliminar, ajuste masivo, exports con datos del cliente).
+    get isAdmin() { return this.session?.role === "admin"; },
+
     // ----- Navigation -----
     goto(viewId) {
       if (viewId !== "analytics") this.stopRealtime();
+      // Un editor no tiene Ajustes: si llega ahí por atajo, lo mandamos al inicio.
+      if (viewId === "settings" && !this.isAdmin) viewId = "dashboard";
       this.view = viewId;
       if (viewId === "catalog") this.loadProducts();
       if (viewId === "stock") this.loadProducts();
       if (viewId === "coupons") this.loadCoupons();
-      if (viewId === "orders") this.loadOrders();
+      if (viewId === "orders") { this.orderPage.offset = 0; this.loadOrders(); }
       if (viewId === "dashboard") this.loadDashboard();
       if (viewId === "analytics") this.loadAnalytics();
-      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); this.loadPaymentFee(); }
+      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); this.loadPaymentFee(); this.loadTradein(); }
+    },
+
+    // Vistas visibles según rol (el sidebar itera sobre esto, no sobre `nav`).
+    get visibleNav() {
+      return this.isAdmin ? this.nav : this.nav.filter(n => n.id !== "settings");
     },
 
     // ----- Data loaders -----
@@ -184,12 +254,49 @@ function adminApp() {
       } catch (err) { this.toast(err.message, "error"); }
     },
 
-    async loadOrders() {
+    // Query string de los filtros de órdenes. Se reusa tal cual para el export
+    // CSV, así que lo que ves en pantalla es exactamente lo que se descarga.
+    orderQueryString(extra = {}) {
+      const p = new URLSearchParams();
+      for (const [k, v] of Object.entries(this.orderQuery)) {
+        if (v !== "" && v != null) p.set(k, v);
+      }
+      for (const [k, v] of Object.entries(extra)) p.set(k, v);
+      return p.toString();
+    },
+
+    async loadOrders({ append = false } = {}) {
+      this.loadingOrders = true;
+      if (!append) this.orderPage.offset = 0;
       try {
-        const q = this.orderFilter ? "?status=" + this.orderFilter : "";
-        const { orders } = await this.api("GET", "/orders" + q);
-        this.orders = orders;
+        const qs = this.orderQueryString({ limit: this.orderPage.limit, offset: this.orderPage.offset });
+        const data = await this.api("GET", "/orders?" + qs);
+        this.orders = append ? [...this.orders, ...data.orders] : data.orders;
+        if (data.page) this.orderPage = { ...this.orderPage, ...data.page };
       } catch (err) { this.toast(err.message, "error"); }
+      finally { this.loadingOrders = false; }
+    },
+
+    async loadMoreOrders() {
+      if (!this.orderPage.hasMore || this.loadingOrders) return;
+      this.orderPage.offset = this.orders.length;
+      await this.loadOrders({ append: true });
+    },
+
+    // La búsqueda dispara mientras se tipea: esperamos a que pare para no
+    // mandar un request por tecla.
+    searchOrdersDebounced() {
+      clearTimeout(this._orderSearchTimer);
+      this._orderSearchTimer = setTimeout(() => this.loadOrders(), 300);
+    },
+
+    resetOrderFilters() {
+      this.orderQuery = { q: "", status: "", fulfillment_status: "", channel: "", from: "", to: "" };
+      this.loadOrders();
+    },
+
+    get orderFiltersActive() {
+      return Object.values(this.orderQuery).some(v => v !== "" && v != null);
     },
 
     async loadUsers() {
@@ -243,6 +350,43 @@ function adminApp() {
       }
     },
 
+    // ----- Precios de recompra (trade-in) -----
+    // Se editan como JSON crudo a propósito: es un mapa modelo → capacidad →
+    // precio con decenas de entradas, y una tabla con inputs sería mucho más
+    // lenta de actualizar que pegar el bloque nuevo que manda el cliente.
+    async loadTradein() {
+      this.tradein.loading = true;
+      try {
+        const t = await this.api("GET", "/settings/tradein");
+        this.tradein.text = JSON.stringify(t.prices, null, 2);
+        this.tradein.isDefault = !!t.isDefault;
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.tradein.loading = false; }
+    },
+    async saveTradein() {
+      if (this.tradein.saving) return;
+      let parsed;
+      try { parsed = JSON.parse(this.tradein.text); }
+      catch (err) { this.toast("JSON inválido: " + err.message, "error"); return; }
+      this.tradein.saving = true;
+      try {
+        const t = await this.api("PATCH", "/settings/tradein", { prices: parsed });
+        this.tradein.text = JSON.stringify(t.prices, null, 2);
+        this.tradein.isDefault = false;
+        this.toast("Precios de recompra guardados ✓", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.tradein.saving = false; }
+    },
+    async resetTradein() {
+      if (!(await this.askConfirm("¿Volver a los precios de recompra de fábrica? Se pierden los valores editados."))) return;
+      try {
+        const t = await this.api("POST", "/settings/tradein/reset");
+        this.tradein.text = JSON.stringify(t.prices, null, 2);
+        this.tradein.isDefault = true;
+        this.toast("Precios restaurados", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
     // ----- Analítica -----
     async loadAnalytics() {
       this.loadRealtime();
@@ -260,10 +404,27 @@ function adminApp() {
       }, 12000);
     },
     stopRealtime() { if (this._rtTimer) { clearInterval(this._rtTimer); this._rtTimer = null; } },
+    async setAnalyticsDays(days) {
+      this.analytics.days = days;
+      try { this.analytics.overview = await this.api("GET", "/analytics/overview?days=" + days); }
+      catch (err) { this.toast(err.message, "error"); }
+    },
     analyticsBarH(v) {
       const days = (this.analytics.overview && this.analytics.overview.perDay) || [];
       const max = Math.max(1, ...days.map(d => d.sessions));
       return Math.max(4, Math.round((Number(v) / max) * 100));
+    },
+    // Las barras de ingresos se escalan contra su propio máximo (no contra el
+    // de sesiones): son magnitudes distintas y compartir escala aplastaría una.
+    salesBarH(v) {
+      const days = (this.analytics.overview && this.analytics.overview.salesPerDay) || [];
+      const max = Math.max(1, ...days.map(d => d.revenue));
+      return Math.max(4, Math.round((Number(v) / max) * 100));
+    },
+    // El referrer llega como URL completa; en pantalla solo sirve el dominio.
+    referrerLabel(r) {
+      if (!r || r === "Directo") return "Directo";
+      try { return new URL(r).hostname.replace(/^www\./, ""); } catch { return r; }
     },
 
     // ----- Mutations -----
@@ -295,21 +456,22 @@ function adminApp() {
       }
     },
 
-    async openStockPopover(storage) {
-      const val = await this.askPrompt(`Stock actual: ${storage.stock}. Ingresa el nuevo stock:`, { defaultValue: String(storage.stock), type: "number" });
-      if (val == null || val === "") return;
-      await this.setStockValue(storage, val);
-    },
-
-    openProductDetail(productId) {
-      const p = this.products.find(p => p.id === productId);
-      if (!p) return;
-      this.drawer.title = "iPhone " + p.line;
-      this.drawer.html = `
-        <p style="color:var(--text-dim)">${p.models.length} modelos · ${p.models.reduce((a, m) => a + m.storages.length, 0)} variantes</p>
-        <p style="margin-top:16px;color:var(--text-dim);font-size:13px">Para editar precio, vuelve a la tabla y haz click directo en el valor. Próximamente: edición avanzada acá.</p>
-      `;
-      this.drawer.open = true;
+    // Ajuste de stock + kardex en la misma ventana: cuando alguien corrige una
+    // cantidad, lo primero que quiere ver es por qué quedó como quedó.
+    openStockModal(storage, label) {
+      if (!storage || !storage.variant_id) return;
+      this.stockModal = {
+        variant_id: storage.variant_id,
+        ref: storage,
+        label: label || "Variante",
+        current: storage.stock,
+        target: storage.stock,
+        reason: "manual",
+        note: "",
+        saving: false,
+        movements: null,
+        loadingLog: false,
+      };
     },
 
     // ----- Productos: crear + editor con GUARDADO EXPLÍCITO (estilo Shopify) -----
@@ -339,7 +501,7 @@ function adminApp() {
     // --- Mutaciones SOLO en el borrador (no tocan el servidor hasta Guardar) ---
     addVariantDraft(model) {
       const last = model.storages[model.storages.length - 1];
-      model.storages.push({ s: "128GB", color: "", p: last ? last.p : 0, stock: 0, variant_id: null, is_active: false });
+      model.storages.push({ s: "128GB", color: "", p: last ? last.p : 0, stock: 0, cost: "", sku: "", variant_id: null, is_active: false });
     },
     removeVariantDraft(model, st) {
       model.storages = model.storages.filter(x => x !== st);
@@ -375,10 +537,10 @@ function adminApp() {
     colorsOfSize(model, size) { return (model.storages || []).filter(v => v.s === size); },
     addColorToSize(model, size) {
       const sib = (model.storages || []).find(v => v.s === size);
-      model.storages.push({ s: size, color: "", p: sib ? sib.p : 0, stock: 0, variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+      model.storages.push({ s: size, color: "", p: sib ? sib.p : 0, stock: 0, cost: sib && sib.cost != null ? sib.cost : "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
     },
     addSizeDraft(model) {
-      model.storages.push({ s: "Nueva", color: "", p: 0, stock: 0, variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+      model.storages.push({ s: "Nueva", color: "", p: 0, stock: 0, cost: "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
     },
     removeSize(model, size) { model.storages = model.storages.filter(v => v.s !== size); },
     renameSize(model, oldSize, newSize) {
@@ -406,62 +568,74 @@ function adminApp() {
       return (model.name || "").replace("iPhone " + product.line, "").trim() || "Base";
     },
 
-    // Stock absoluto → delta (usado por el editor rápido de la tabla).
-    async setStockValue(st, newVal) {
-      const target = Math.round(Number(newVal));
-      if (isNaN(target) || target < 0) { this.toast("Stock inválido", "error"); return; }
-      const delta = target - st.stock;
-      if (delta === 0) return;
+    // El endpoint recibe DELTA, no valor absoluto: así el kardex registra el
+    // movimiento real ("entraron 3") y no un salto sin explicación.
+    async saveStockModal() {
+      const m = this.stockModal;
+      if (!m || m.saving) return;
+      const target = Math.round(Number(m.target));
+      if (!Number.isFinite(target) || target < 0) return this.toast("Stock inválido", "error");
+      const delta = target - m.current;
+      if (delta === 0) { this.stockModal = null; return; }
+      m.saving = true;
       try {
-        const updated = await this.api("POST", "/products/variants/" + st.variant_id + "/stock", { delta, reason: "manual", note: "Editor" });
-        st.stock = updated.stock;
-        this.toast("Stock: " + updated.stock, "success");
-      } catch (err) { this.toast(err.message, "error"); }
+        const updated = await this.api("POST", "/products/variants/" + m.variant_id + "/stock", {
+          delta, reason: m.reason, note: m.note || null,
+        });
+        if (m.ref) m.ref.stock = updated.stock;
+        this.stockModal = null;
+        this.toast(`Stock: ${updated.stock} (${delta > 0 ? "+" : ""}${delta})`, "success");
+        this.loadDashboard();
+      } catch (err) {
+        this.toast(err.message, "error");
+        m.saving = false;
+      }
     },
 
-    // --- Guardar: aplica el borrador (crea/actualiza/elimina) en una sola tanda ---
+    async loadStockLog() {
+      const m = this.stockModal;
+      if (!m || m.movements) return;
+      m.loadingLog = true;
+      try {
+        const { movements } = await this.api("GET", "/products/variants/" + m.variant_id + "/stock-log?limit=100");
+        m.movements = movements;
+      } catch (err) { this.toast(err.message, "error"); m.movements = []; }
+      finally { m.loadingLog = false; }
+    },
+
+    // --- Guardar: manda el borrador COMPLETO en un solo request ---
+    // Antes esto disparaba ~15 llamadas sueltas (PATCH producto, DELETE modelo,
+    // POST variante, POST stock…). Si una fallaba a mitad, el producto quedaba
+    // partido: modelo borrado con sus variantes creadas, precios nuevos con
+    // stock viejo. Ahora PUT /products/:id/save lo aplica en una transacción:
+    // o queda todo, o no queda nada.
     async saveProductDraft() {
       if (this.prodEditor.saving) return;
-      const d = this.prodEditor.draft, orig = this.prodEditor.original;
+      const d = this.prodEditor.draft;
       this.prodEditor.saving = true;
       try {
-        await this.api("PATCH", "/products/" + d.id, { line: d.line, year: d.year, hero_img: d.img || "", hidden: !!d.hidden });
-
-        // Modelos eliminados (estaban en original, ya no en el borrador)
-        const draftModelIds = new Set(d.models.filter(m => m.model_id).map(m => m.model_id));
-        for (const om of (orig.models || [])) {
-          if (om.model_id && !draftModelIds.has(om.model_id)) await this.api("DELETE", "/products/models/" + om.model_id);
-        }
-
-        // Modelos: crear (sin id) o actualizar; luego sus variantes
-        for (const m of d.models) {
-          let modelId = m.model_id;
-          if (!modelId) {
-            const created = await this.api("POST", "/products/" + d.id + "/models", { name: m.name, img: m.img || "", sealed: !!m.sealed });
-            modelId = created.id;
-          } else {
-            await this.api("PATCH", "/products/models/" + modelId, { name: m.name, img: m.img || "", sealed: !!m.sealed });
-          }
-          const om = (orig.models || []).find(x => x.model_id === modelId);
-          const origVars = (om && om.storages) || [];
-          const draftVarIds = new Set(m.storages.filter(s => s.variant_id).map(s => s.variant_id));
-          for (const ov of origVars) {
-            if (ov.variant_id && !draftVarIds.has(ov.variant_id)) await this.api("DELETE", "/products/variants/" + ov.variant_id);
-          }
-          for (const s of m.storages) {
-            if (!s.variant_id) {
-              await this.api("POST", "/products/models/" + modelId + "/variants", { storage: s.s, color: s.color || "", price: Math.round(Number(s.p)) || 0, stock: Math.round(Number(s.stock)) || 0, is_active: !!s.is_active });
-            } else {
-              await this.api("PATCH", "/products/variants/" + s.variant_id, { storage: s.s, color: s.color || "", price: Math.round(Number(s.p)) || 0, is_active: !!s.is_active });
-              const ov = origVars.find(x => x.variant_id === s.variant_id);
-              const origStock = ov ? Number(ov.stock) : 0;
-              const newStock = Number(s.stock) || 0;
-              if (newStock !== origStock) {
-                await this.api("POST", "/products/variants/" + s.variant_id + "/stock", { delta: newStock - origStock, reason: "manual", note: "Editor" });
-              }
-            }
-          }
-        }
+        await this.api("PUT", "/products/" + d.id + "/save", {
+          line: d.line,
+          year: d.year,
+          img: d.img || "",
+          hidden: !!d.hidden,
+          models: (d.models || []).map(m => ({
+            model_id: m.model_id || null,
+            name: m.name,
+            img: m.img || "",
+            sealed: !!m.sealed,
+            storages: (m.storages || []).map(s => ({
+              variant_id: s.variant_id || null,
+              s: s.s,
+              color: s.color || "",
+              p: Math.round(Number(s.p)) || 0,
+              stock: Math.round(Number(s.stock)) || 0,
+              cost: s.cost === "" || s.cost == null ? null : Math.round(Number(s.cost)),
+              sku: s.sku || "",
+              is_active: !!s.is_active,
+            })),
+          })),
+        });
         this.toast("Cambios guardados ✓", "success");
         await this.loadProducts();
         this.prodEditor.open = false;
@@ -470,6 +644,15 @@ function adminApp() {
       } finally {
         this.prodEditor.saving = false;
       }
+    },
+
+    // Margen de una variante (precio − costo). Devuelve null si no hay costo
+    // cargado: mostrar "0%" ahí haría pensar que se vende sin ganancia.
+    variantMargin(st) {
+      const price = Number(st.p) || 0;
+      const cost = st.cost === "" || st.cost == null ? null : Number(st.cost);
+      if (cost == null || !Number.isFinite(cost) || price <= 0) return null;
+      return { abs: price - cost, pct: Math.round(((price - cost) / price) * 1000) / 10 };
     },
 
     async deleteProduct() {
@@ -552,65 +735,60 @@ function adminApp() {
     },
 
     // ----- Cupones -----
-    newCoupon() {
-      this.drawer.title = "Nuevo cupón";
-      this.drawer.html = `
-        <form onsubmit="event.preventDefault(); window.__admin.createCouponSubmit(this);">
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Código</span>
-            <input name="code" required placeholder="BLACKFRIDAY30" style="text-transform:uppercase" />
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Tipo</span>
-            <select name="type">
-              <option value="percent">Porcentaje (%)</option>
-              <option value="fixed">Monto fijo ($)</option>
-            </select>
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Valor</span>
-            <input name="value" type="number" required min="1" placeholder="30" />
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Subtotal mínimo (opcional)</span>
-            <input name="min_subtotal" type="number" min="0" placeholder="0" />
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Tope de usos (opcional)</span>
-            <input name="max_uses" type="number" min="1" placeholder="100" />
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Vigente desde (opcional)</span>
-            <input name="starts_at" type="datetime-local" />
-          </label>
-          <label><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em">Vigente hasta (opcional)</span>
-            <input name="ends_at" type="datetime-local" />
-          </label>
-          <button type="submit" class="ac-btn-primary" style="width:100%;margin-top:8px">Crear cupón</button>
-        </form>
-      `;
-      this.drawer.open = true;
-      window.__admin = this;
+    // Crear y editar usan el MISMO formulario (`couponEditor`): antes crear
+    // armaba HTML a mano en el drawer y editar era un toast de "próximamente",
+    // así que corregir un cupón obligaba a borrarlo y rehacerlo (perdiendo el
+    // contador de usos).
+    openCouponEditor(mode, c = null) {
+      this.couponEditor = {
+        mode,
+        id: c ? c.id : null,
+        code: c ? c.code : "",
+        type: c ? c.type : "percent",
+        value: c ? c.value : "",
+        min_subtotal: c && c.min_subtotal ? c.min_subtotal : "",
+        max_uses: c && c.max_uses != null ? c.max_uses : "",
+        starts_at: this.toLocalInput(c && c.starts_at),
+        ends_at: this.toLocalInput(c && c.ends_at),
+        is_active: c ? !!c.is_active : true,
+        used_count: c ? c.used_count : 0,
+        typeOpen: false,
+        saving: false,
+      };
     },
 
-    async createCouponSubmit(form) {
-      const fd = new FormData(form);
+    async saveCoupon() {
+      const e = this.couponEditor;
+      if (!e || e.saving) return;
+      const code = String(e.code || "").trim().toUpperCase();
+      if (!code) return this.toast("El código es obligatorio", "error");
+      const value = Number(e.value);
+      if (!Number.isFinite(value) || value <= 0) return this.toast("El valor debe ser mayor a 0", "error");
+      if (e.type === "percent" && value > 100) return this.toast("Un porcentaje no puede superar 100", "error");
+      if (e.starts_at && e.ends_at && new Date(e.starts_at) > new Date(e.ends_at)) {
+        return this.toast("La fecha de inicio es posterior a la de término", "error");
+      }
       const body = {
-        code: fd.get("code"),
-        type: fd.get("type"),
-        value: Number(fd.get("value")),
-        min_subtotal: fd.get("min_subtotal") ? Number(fd.get("min_subtotal")) : 0,
-        max_uses: fd.get("max_uses") ? Number(fd.get("max_uses")) : null,
-        starts_at: fd.get("starts_at") || null,
-        ends_at: fd.get("ends_at") || null,
+        code,
+        type: e.type,
+        value: Math.round(value),
+        min_subtotal: e.min_subtotal === "" ? 0 : Math.round(Number(e.min_subtotal)),
+        max_uses: e.max_uses === "" ? null : Math.round(Number(e.max_uses)),
+        starts_at: e.starts_at || null,
+        ends_at: e.ends_at || null,
+        is_active: !!e.is_active,
       };
+      e.saving = true;
       try {
-        await this.api("POST", "/coupons", body);
-        this.toast("Cupón creado", "success");
-        this.closeDrawer();
+        if (e.mode === "create") await this.api("POST", "/coupons", body);
+        else await this.api("PATCH", "/coupons/" + e.id, body);
+        this.toast(e.mode === "create" ? "Cupón creado ✓" : "Cupón actualizado ✓", "success");
+        this.couponEditor = null;
         this.loadCoupons();
       } catch (err) {
         this.toast(err.message, "error");
+        e.saving = false;
       }
-    },
-
-    editCoupon(c) {
-      // Reuso newCoupon UI con prefill (simplificado por ahora)
-      this.toast("Edición de cupón: próximamente. Por ahora, eliminar y crear de nuevo.", "info");
     },
 
     async toggleCoupon(c) {
@@ -645,42 +823,335 @@ function adminApp() {
 
     // ----- Órdenes -----
     async openOrderDetail(id) {
+      this.orderDrawer.open = true;
+      this.orderDrawer.loading = true;
+      this.orderDrawer.tab = "detalle";
+      this.orderDrawer.order = null;
+      this.orderDrawer.history = [];
+      this.orderDrawer.historyLoaded = false;
       try {
         const o = await this.api("GET", "/orders/" + id);
-        const items = (o.items || []).map(i =>
-          `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-            <span>${i.model} ${i.storage || ""}${i.color ? " · " + i.color : ""}</span><span class="ac-mono">${this.fmtCLP(i.price)}</span>
-          </div>`
-        ).join("");
-        this.drawer.title = "Orden " + o.id;
-        this.drawer.html = `
-          <div style="margin-bottom:16px">
-            <span class="ac-state-pill state-${o.status}">${o.status}</span>
-          </div>
-          <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">Cliente</h3>
-          <p style="margin:0;font-size:14px">${o.buyer?.name || "—"}<br/><span style="color:var(--text-dim)">${o.buyer?.email || ""}</span><br/><span style="color:var(--text-dim)">${o.buyer?.phone || ""}</span>${o.buyer?.rut ? '<br/><span style="color:var(--text-dim)">RUT: ' + o.buyer.rut + '</span>' : ''}${o.buyer?.instagram ? '<br/><span style="color:var(--text-dim)">IG: ' + o.buyer.instagram + '</span>' : ''}${o.buyer?.color ? '<br/><span style="color:var(--text-dim)">Color: ' + o.buyer.color + '</span>' : ''}</p>
-          <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? 'Retiro en tienda' : 'Envío'}</h3>
-          <p style="margin:0;font-size:14px">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? '🏬 ' + (o.shipping?.address?.store || 'Padre Mariano 98, Of. 105, Providencia') : ('Sucursal Chilexpress: ' + (o.shipping?.address?.branch || ((o.shipping?.address?.street || '') + ' ' + (o.shipping?.address?.number || '')).trim() || '—') + ' — ' + (o.shipping?.address?.county || '') + ', ' + (o.shipping?.address?.region || ''))}</p>
-          <h3 style="font-size:13px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px">Items</h3>
-          ${items}
-          <div style="display:flex;justify-content:space-between;padding:8px 0;color:var(--text-dim)"><span>Envío</span><span class="ac-mono">${(o.shipping?.method === 'pickup' || o.shipping?.serviceCode === 'PICKUP') ? 'Retiro en tienda' : (Number(o.shipping_cost) > 0 ? this.fmtCLP(o.shipping_cost) : 'Por pagar')}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:800;font-size:18px;color:var(--accent)"><span>Total</span><span class="ac-mono">${this.fmtCLP(o.total)}</span></div>
-          ${o.buyer?.phone ? `<a href="https://wa.me/${o.buyer.phone.replace(/[^0-9]/g, '')}" target="_blank" class="ac-btn-ghost" style="display:block;text-align:center;margin-top:18px;text-decoration:none">Contactar por WhatsApp</a>` : ""}
-          <button class="ac-btn-danger" style="width:100%;margin-top:10px" onclick="window.__admin.deleteOrder('${o.id}')">Eliminar orden</button>
-        `;
-        window.__admin = this;
-        this.drawer.open = true;
+        this.orderDrawer.order = o;
+        this.orderDrawer.form = {
+          fulfillment_status: o.fulfillment_status || "unfulfilled",
+          tracking_code: o.tracking_code || "",
+          tracking_carrier: o.tracking_carrier || "",
+          admin_notes: o.admin_notes || "",
+          status: o.status,
+        };
+      } catch (err) {
+        this.toast(err.message, "error");
+        this.orderDrawer.open = false;
+      } finally {
+        this.orderDrawer.loading = false;
+      }
+    },
+
+    closeOrderDrawer() {
+      this.orderDrawer.open = false;
+      this.orderDrawer.order = null;
+    },
+
+    // Guarda preparación/envío. El estado de PAGO va aparte y solo si sos admin:
+    // lo escribe el webhook de Mercado Pago y tocarlo a mano mueve ingresos.
+    async saveOrderFulfillment() {
+      const d = this.orderDrawer;
+      if (!d.order || d.saving) return;
+      const body = {
+        fulfillment_status: d.form.fulfillment_status,
+        tracking_code: d.form.tracking_code || "",
+        tracking_carrier: d.form.tracking_carrier || "",
+        admin_notes: d.form.admin_notes || "",
+      };
+      if (this.isAdmin && d.form.status !== d.order.status) body.status = d.form.status;
+      d.saving = true;
+      try {
+        const updated = await this.api("PATCH", "/orders/" + d.order.id, body);
+        d.order = { ...d.order, ...updated };
+        d.historyLoaded = false;
+        this.toast("Orden actualizada ✓", "success");
+        // La lista de atrás muestra estado y tracking: refrescamos la fila.
+        const row = this.orders.find(o => o.id === d.order.id);
+        if (row) {
+          row.fulfillment_status = updated.fulfillment_status;
+          row.status = updated.status;
+          row.tracking_code = updated.tracking_code;
+        }
+        this.loadDashboard();
       } catch (err) { this.toast(err.message, "error"); }
+      finally { d.saving = false; }
+    },
+
+    // El historial sale del audit_log — no hay tabla aparte de eventos.
+    async loadOrderHistory() {
+      const d = this.orderDrawer;
+      if (!d.order || d.historyLoaded) return;
+      try {
+        const { entries } = await this.api("GET", "/orders/" + d.order.id + "/history");
+        d.history = entries;
+        d.historyLoaded = true;
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    // Resume un cambio de orden en una línea legible ("Sin preparar → Enviado").
+    historySummary(e) {
+      if (e.action === "create") return "Creó la orden";
+      if (e.action === "delete") return "Eliminó la orden";
+      if (e.action === "export") return "Exportó órdenes a CSV";
+      const parts = [];
+      const b = e.before || {}, a = e.after || {};
+      if (b.status !== a.status) parts.push(`Pago: ${this.payStateLabel(b.status)} → ${this.payStateLabel(a.status)}`);
+      if (b.fulfillment_status !== a.fulfillment_status) {
+        parts.push(`Envío: ${this.fulfillmentLabel(b.fulfillment_status)} → ${this.fulfillmentLabel(a.fulfillment_status)}`);
+      }
+      if ((b.tracking_code || "") !== (a.tracking_code || "")) parts.push(`Tracking: ${a.tracking_code || "(vacío)"}`);
+      if ((b.admin_notes || "") !== (a.admin_notes || "")) parts.push("Actualizó la nota interna");
+      return parts.length ? parts.join(" · ") : "Sin cambios visibles";
+    },
+
+    get orderIsPickup() {
+      const s = this.orderDrawer.order?.shipping;
+      return !!s && (s.method === "pickup" || s.serviceCode === "PICKUP");
+    },
+
+    // Dirección de despacho en una línea (sucursal Chilexpress o calle+número).
+    get orderAddressLine() {
+      const a = this.orderDrawer.order?.shipping?.address || {};
+      if (this.orderIsPickup) return a.store || "Padre Mariano 98, Of. 105, Providencia";
+      const street = [a.street, a.number].filter(Boolean).join(" ").trim();
+      const place = [a.county, a.region].filter(Boolean).join(", ");
+      return [a.branch || street || "—", place].filter(Boolean).join(" — ");
+    },
+
+    whatsappLink(phone) {
+      const digits = String(phone || "").replace(/[^0-9]/g, "");
+      return digits ? "https://wa.me/" + digits : null;
     },
 
     async deleteOrder(id) {
       if (!(await this.askConfirm("¿Eliminar esta orden? No se puede deshacer."))) return;
       try {
         await this.api("DELETE", "/orders/" + id);
-        this.drawer.open = false;
+        this.closeOrderDrawer();
         this.toast("Orden eliminada", "success");
         this.loadOrders();
       } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    // ----- Venta manual (tienda / Instagram / transferencia) -----
+    // Reusa el mismo shape de items del carro público, pero mandando
+    // `variant_id`: el backend resuelve precio y datos del producto contra la
+    // DB para que una venta cargada a mano descuente stock igual que una web.
+    openManualOrder() {
+      if (!this.products.length) this.loadProducts();
+      this.manualOrder = {
+        items: [],
+        search: "",
+        buyer: { name: "", email: "", phone: "", rut: "", instagram: "" },
+        channel: "store",
+        payment_method: "cash",
+        status: "approved",
+        fulfillment_status: "delivered",
+        shipping_cost: "",
+        discount: "",
+        notes: "",
+        channelOpen: false,
+        methodOpen: false,
+        saving: false,
+      };
+    },
+
+    // Busca variantes por modelo/capacidad/color/SKU. Solo muestra resultados
+    // cuando ya se escribió algo: la lista completa son cientos de variantes.
+    get manualSearchResults() {
+      const q = (this.manualOrder?.search || "").toLowerCase().trim();
+      if (!q) return [];
+      const out = [];
+      for (const p of this.products) {
+        for (const m of (p.models || [])) {
+          for (const s of (m.storages || [])) {
+            if (!s.variant_id) continue;
+            const label = `${m.name} ${s.s}${s.color ? " " + s.color : ""}`;
+            if (!label.toLowerCase().includes(q) && !String(s.sku || "").toLowerCase().includes(q)) continue;
+            out.push({ variant_id: s.variant_id, label, price: s.p, stock: s.stock, sku: s.sku || "" });
+            if (out.length >= 25) return out;
+          }
+        }
+      }
+      return out;
+    },
+
+    manualAddItem(v) {
+      const mo = this.manualOrder;
+      const existing = mo.items.find(i => i.variant_id === v.variant_id);
+      if (existing) existing.qty += 1;
+      else mo.items.push({ variant_id: v.variant_id, label: v.label, price: v.price, list_price: v.price, stock: v.stock, qty: 1 });
+      mo.search = "";
+    },
+    manualRemoveItem(item) {
+      this.manualOrder.items = this.manualOrder.items.filter(i => i !== item);
+    },
+    get manualTotals() {
+      const mo = this.manualOrder;
+      if (!mo) return { subtotal: 0, shipping: 0, discount: 0, total: 0 };
+      const subtotal = mo.items.reduce((a, i) => a + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
+      const shipping = Math.max(0, Math.round(Number(mo.shipping_cost) || 0));
+      const discount = Math.max(0, Math.round(Number(mo.discount) || 0));
+      return { subtotal, shipping, discount, total: Math.max(0, subtotal + shipping - discount) };
+    },
+    // Avisa si la venta deja stock negativo (el backend lo corta en 0, pero el
+    // aviso evita registrar una venta de algo que no está en la vitrina).
+    get manualStockWarnings() {
+      if (!this.manualOrder) return [];
+      return this.manualOrder.items.filter(i => i.qty > i.stock);
+    },
+
+    async saveManualOrder() {
+      const mo = this.manualOrder;
+      if (!mo || mo.saving) return;
+      if (!mo.items.length) return this.toast("Agregá al menos un producto", "error");
+      if (mo.status === "approved" && this.manualStockWarnings.length) {
+        const labels = this.manualStockWarnings.map(i => i.label).join(", ");
+        if (!(await this.askConfirm(`Sin stock suficiente de: ${labels}. ¿Registrar la venta igual? El stock quedará en 0.`))) return;
+      }
+      mo.saving = true;
+      try {
+        const created = await this.api("POST", "/orders", {
+          items: mo.items.map(i => ({ variant_id: i.variant_id, qty: i.qty, price: Math.round(Number(i.price) || 0) })),
+          buyer: mo.buyer,
+          channel: mo.channel,
+          payment_method: mo.payment_method,
+          status: mo.status,
+          fulfillment_status: mo.fulfillment_status,
+          shipping_cost: this.manualTotals.shipping,
+          discount: this.manualTotals.discount,
+          notes: mo.notes || null,
+        });
+        this.manualOrder = null;
+        this.toast("Venta registrada: " + created.id, "success");
+        if (this.view === "orders") this.loadOrders();
+        this.loadDashboard();
+        if (this.view === "catalog" || this.view === "stock") this.loadProducts();
+      } catch (err) {
+        this.toast(err.message, "error");
+        mo.saving = false;
+      }
+    },
+
+    // ----- Exports CSV -----
+    // Descarga vía <a download> y no fetch+blob: la respuesta ya viene con
+    // Content-Disposition y así la cookie de sesión viaja sola.
+    download(path) {
+      const a = document.createElement("a");
+      a.href = "/api/admin" + path;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+    exportOrders() {
+      const qs = this.orderQueryString();
+      this.download("/orders/export.csv" + (qs ? "?" + qs : ""));
+      this.toast("Descargando órdenes…", "info");
+    },
+    exportInventory() {
+      this.download("/products/export.csv");
+      this.toast("Descargando inventario…", "info");
+    },
+
+    // ----- Ajuste masivo de precios -----
+    // Nunca aplica a ciegas: primero un dry-run que devuelve la lista exacta de
+    // variantes y sus precios nuevos, y después de aplicar queda el batchId
+    // para deshacer (restaura los valores exactos, no la fórmula inversa).
+    openBulkPrice() {
+      this.bulkPrice = { open: true, scope: "all", type: "percent", value: "", preview: null, loading: false, applying: false, lastBatch: null, scopeOpen: false };
+      if (!this.products.length) this.loadProducts();
+    },
+    closeBulkPrice() { this.bulkPrice.open = false; },
+
+    get bulkScopeOptions() {
+      const opts = [{ id: "all", label: "Todo el catálogo" }];
+      for (const p of this.products) {
+        opts.push({ id: "line:" + p.id, label: `Línea iPhone ${p.line}` });
+        for (const m of (p.models || [])) {
+          if (m.model_id) opts.push({ id: "model:" + m.model_id, label: `   ${m.name}` });
+        }
+      }
+      return opts;
+    },
+    bulkScopeLabel(id) {
+      return this.bulkScopeOptions.find(o => o.id === id)?.label.trim() || id;
+    },
+
+    async previewBulkPrice() {
+      const b = this.bulkPrice;
+      const value = Number(b.value);
+      if (!Number.isFinite(value) || value === 0) return this.toast("Ingresá un valor distinto de 0", "error");
+      b.loading = true;
+      try {
+        b.preview = await this.api("POST", "/products/variants/bulk-price", {
+          scope: b.scope, type: b.type, value, dryRun: true,
+        });
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { b.loading = false; }
+    },
+
+    async applyBulkPrice() {
+      const b = this.bulkPrice;
+      if (!b.preview || b.applying) return;
+      const verb = b.type === "percent"
+        ? `${Number(b.value) > 0 ? "+" : ""}${b.value}%`
+        : `${Number(b.value) > 0 ? "+" : ""}${this.fmtCLP(Math.abs(Number(b.value)))}`;
+      if (!(await this.askConfirm(`Aplicar ${verb} a ${b.preview.affected} variantes de "${this.bulkScopeLabel(b.scope)}"?`))) return;
+      b.applying = true;
+      try {
+        const r = await this.api("POST", "/products/variants/bulk-price", {
+          scope: b.scope, type: b.type, value: Number(b.value),
+        });
+        b.lastBatch = { id: r.batchId, affected: r.affected };
+        b.preview = null;
+        b.value = "";
+        this.toast(`${r.affected} precios actualizados`, "success");
+        await this.loadProducts();
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { b.applying = false; }
+    },
+
+    async undoBulkPrice() {
+      const batch = this.bulkPrice.lastBatch;
+      if (!batch) return;
+      if (!(await this.askConfirm(`¿Revertir el ajuste de ${batch.affected} precios?`))) return;
+      try {
+        const r = await this.api("POST", "/products/variants/bulk-price/undo", { batchId: batch.id });
+        this.bulkPrice.lastBatch = null;
+        this.toast(`${r.restored} precios restaurados${r.skipped ? ` (${r.skipped} ya no existen)` : ""}`, "success");
+        await this.loadProducts();
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    // Abre el mismo modal de stock desde el dashboard, con el kardex ya cargado.
+    openKardex(row) {
+      this.openStockModal({ variant_id: row.variant_id, stock: row.stock }, this.criticalLabel(row));
+      this.stockModal.ref = row; // la fila del dashboard también refleja el cambio
+      this.loadStockLog();
+    },
+    kardexReason(r) {
+      const map = { manual: "Ajuste manual", sale: "Venta", return: "Devolución", adjust: "Corrección", reserve: "Reserva", release: "Liberación" };
+      return map[r] || r;
+    },
+
+    // Ajuste rápido desde el panel de stock crítico del dashboard.
+    async bumpCriticalStock(row, delta) {
+      try {
+        const updated = await this.api("POST", "/products/variants/" + row.variant_id + "/stock", {
+          delta, reason: "manual", note: "Reposición desde el dashboard",
+        });
+        row.stock = updated.stock;
+        this.toast(`Stock: ${updated.stock}`, "success");
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+    criticalLabel(row) {
+      return `${row.model} ${row.storage}${row.color ? " · " + row.color : ""}`;
     },
 
     // ----- Usuarios: crear / editar -----
@@ -723,28 +1194,61 @@ function adminApp() {
       if (!this.session) return;     // defensa extra: nunca abrir sin login
       this.palette.open = true;
       this.palette.query = "";
-      this.palette.results = this.allPaletteItems();
-      this.palette.idx = 0;
+      this.filterPalette();
       this.$nextTick(() => this.$refs.paletteInput?.focus());
     },
 
+    // Todo lo que sale acá EJECUTA algo de verdad. Antes los resultados de
+    // producto solo hacían goto('catalog') y el placeholder prometía
+    // "subir 5% iphone 15", un lenguaje natural que nunca existió.
     allPaletteItems() {
-      const nav = this.nav.map(n => ({ label: "Ir a " + n.label, icon: "→", action: () => this.goto(n.id) }));
-      const products = this.products.flatMap(p => p.models.flatMap(m => m.storages.map(s => ({
-        label: `${m.name} ${s.s} — ${this.fmtCLP(s.p)}`,
-        hint: `Stock: ${s.stock}`,
-        icon: "▦",
-        action: () => { this.goto("catalog"); }
-      }))));
-      return [...nav, ...products].slice(0, 50);
+      const items = this.visibleNav.map(n => ({
+        label: "Ir a " + n.label, icon: "→", action: () => this.goto(n.id),
+      }));
+
+      items.push(
+        { label: "Registrar venta manual", hint: "Tienda, Instagram, transferencia", icon: "＋", action: () => { this.goto("orders"); this.openManualOrder(); } },
+        { label: "Nuevo producto", icon: "▦", action: () => { this.goto("catalog"); this.newProduct(); } },
+      );
+      if (this.isAdmin) {
+        items.push(
+          { label: "Nuevo cupón", icon: "🎟", action: () => { this.goto("coupons"); this.openCouponEditor("create"); } },
+          { label: "Ajuste masivo de precios", hint: "Con vista previa y deshacer", icon: "↗", action: () => { this.goto("catalog"); this.openBulkPrice(); } },
+          { label: "Exportar inventario a CSV", icon: "⬇", action: () => this.exportInventory() },
+          { label: "Exportar órdenes a CSV", hint: "Respeta los filtros activos", icon: "⬇", action: () => this.exportOrders() },
+        );
+      }
+
+      // Cada modelo abre su editor; cada orden reciente abre su detalle.
+      for (const p of this.products) {
+        for (const m of (p.models || [])) {
+          const stock = (m.storages || []).reduce((a, s) => a + (Number(s.stock) || 0), 0);
+          items.push({
+            label: m.name,
+            hint: `${this.modelPriceRange(m)} · stock ${stock}`,
+            icon: "▦",
+            action: () => { this.goto("catalog"); this.openProductEditor(p.id); },
+          });
+        }
+      }
+      for (const o of this.orders.slice(0, 40)) {
+        items.push({
+          label: o.id,
+          hint: `${(o.buyer && o.buyer.name) || "Sin nombre"} · ${this.fmtCLP(o.total)}`,
+          icon: "▤",
+          action: () => { this.goto("orders"); this.openOrderDetail(o.id); },
+        });
+      }
+      return items;
     },
 
     filterPalette() {
       const q = this.palette.query.toLowerCase().trim();
-      if (!q) { this.palette.results = this.allPaletteItems(); return; }
-      this.palette.results = this.allPaletteItems().filter(r =>
-        r.label.toLowerCase().includes(q) || (r.hint || "").toLowerCase().includes(q)
-      ).slice(0, 20);
+      const all = this.allPaletteItems();
+      this.palette.results = (q
+        ? all.filter(r => r.label.toLowerCase().includes(q) || (r.hint || "").toLowerCase().includes(q))
+        : all
+      ).slice(0, 30);
       this.palette.idx = 0;
     },
 
@@ -755,9 +1259,6 @@ function adminApp() {
         this.palette.open = false;
       }
     },
-
-    // ----- Drawer -----
-    closeDrawer() { this.drawer.open = false; },
 
     // ----- Toasts -----
     toast(msg, kind = "info", undo = null) {
@@ -796,6 +1297,37 @@ function adminApp() {
       if (n == null || isNaN(n)) return "—";
       return "$" + Number(n).toLocaleString("es-CL");
     },
+
+    // La DB guarda "YYYY-MM-DD HH:MM:SS" en UTC. Sin forzar la zona, el
+    // navegador del equipo mostraría la hora local de su máquina y no la de la
+    // tienda — que es la que importa para "¿a qué hora entró este pedido?".
+    toDate(sqlDate) {
+      if (!sqlDate) return null;
+      const s = String(sqlDate);
+      const d = new Date(s.replace(" ", "T") + (/[Zz]|[+-]\d\d:?\d\d$/.test(s) ? "" : "Z"));
+      return isNaN(d.getTime()) ? null : d;
+    },
+    fmtDateTime(sqlDate) {
+      const d = this.toDate(sqlDate);
+      if (!d) return "—";
+      return d.toLocaleString("es-CL", {
+        timeZone: "America/Santiago",
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+    },
+    // SQL datetime → valor para <input type="datetime-local">.
+    toLocalInput(sqlDate) {
+      const d = this.toDate(sqlDate);
+      if (!d) return "";
+      const pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
+    fulfillmentLabel(id) { return this.FULFILLMENTS.find(f => f.id === id)?.label || id || "—"; },
+    payStateLabel(id) { return this.PAY_STATES.find(s => s.id === id)?.label || id || "—"; },
+    channelLabel(id) { return this.CHANNELS.find(c => c.id === id)?.label || id || "—"; },
+    payMethodLabel(id) { return this.PAY_METHODS.find(m => m.id === id)?.label || id || "—"; },
+
     timeAgo(iso) {
       if (!iso) return "";
       const d = new Date(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z"));

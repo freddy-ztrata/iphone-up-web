@@ -1,6 +1,12 @@
 // Analítica del admin: tiempo real + resumen de sesiones/páginas/ventas.
+//
+// Los agrupamientos por día usan el offset real de Santiago (ver lib/tz.js);
+// si no, un pedido de las 21:30 hora chilena caía en el día siguiente UTC y las
+// barras del gráfico no coincidían con lo que el equipo vivió en la tienda.
+
 const express = require("express");
 const db = require("../../db");
+const tz = require("../../lib/tz");
 
 const router = express.Router();
 
@@ -23,42 +29,42 @@ router.get("/realtime", (_req, res) => {
 // referidos y ventas (órdenes aprobadas).
 router.get("/overview", (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
-  const since = `-${days} days`;
+  const p = { since: `-${days} days`, tz: tz.sqliteModifier() };
 
   const perDay = db.prepare(`
-    SELECT date(created_at) AS day, COUNT(*) AS pageviews, COUNT(DISTINCT session_id) AS sessions
-    FROM visits WHERE created_at > datetime('now', ?)
+    SELECT date(created_at, @tz) AS day, COUNT(*) AS pageviews, COUNT(DISTINCT session_id) AS sessions
+    FROM visits WHERE created_at > datetime('now', @since)
     GROUP BY day ORDER BY day ASC
-  `).all(since);
+  `).all(p);
 
   const topPages = db.prepare(`
     SELECT path, COUNT(*) AS pageviews, COUNT(DISTINCT session_id) AS sessions
-    FROM visits WHERE created_at > datetime('now', ?)
+    FROM visits WHERE created_at > datetime('now', @since)
     GROUP BY path ORDER BY pageviews DESC LIMIT 10
-  `).all(since);
+  `).all({ since: p.since });
 
   const topReferrers = db.prepare(`
     SELECT CASE WHEN referrer IS NULL OR referrer = '' THEN 'Directo' ELSE referrer END AS referrer,
            COUNT(DISTINCT session_id) AS sessions
-    FROM visits WHERE created_at > datetime('now', ?)
+    FROM visits WHERE created_at > datetime('now', @since)
     GROUP BY referrer ORDER BY sessions DESC LIMIT 8
-  `).all(since);
+  `).all({ since: p.since });
 
   const totals = db.prepare(`
     SELECT COUNT(*) AS pageviews, COUNT(DISTINCT session_id) AS sessions
-    FROM visits WHERE created_at > datetime('now', ?)
-  `).get(since);
+    FROM visits WHERE created_at > datetime('now', @since)
+  `).get({ since: p.since });
 
   const salesPerDay = db.prepare(`
-    SELECT date(created_at) AS day, COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue
-    FROM orders WHERE status = 'approved' AND created_at > datetime('now', ?)
+    SELECT date(created_at, @tz) AS day, COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue
+    FROM orders WHERE status = 'approved' AND created_at > datetime('now', @since)
     GROUP BY day ORDER BY day ASC
-  `).all(since);
+  `).all(p);
 
   const salesTotals = db.prepare(`
     SELECT COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue
-    FROM orders WHERE status = 'approved' AND created_at > datetime('now', ?)
-  `).get(since);
+    FROM orders WHERE status = 'approved' AND created_at > datetime('now', @since)
+  `).get({ since: p.since });
 
   res.json({ days, perDay, topPages, topReferrers, totals, salesPerDay, salesTotals });
 });
