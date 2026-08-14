@@ -505,7 +505,27 @@ router.put("/:id/save", (req, res) => {
         (m.storages || []).forEach((s, sIdx) => {
           const price = Math.max(0, Math.round(Number(s.p) || 0));
           const targetStock = Math.max(0, Math.round(Number(s.stock) || 0));
-          const optional = (v, cast) => (v == null || v === "" ? null : cast(v));
+          const origVar = s.variant_id
+            ? (origModel?.storages || []).find(x => Number(x.variant_id) === Number(s.variant_id))
+            : null;
+
+          // Campos opcionales (compare_at / cost / sku) sobre una variante que
+          // ya existe:
+          //   key ausente  → conservar lo que hay en la DB (el borrador no lo
+          //                  conoce; asumir null borraba datos en cada guardado)
+          //   null o ""    → el usuario lo está limpiando a propósito
+          // En una variante nueva no hay valor previo, así que ausente = vacío.
+          const optional = (key, draftValue, cast) => {
+            const raw = draftValue === undefined ? (origVar ? origVar[key] : null) : draftValue;
+            // "" incluye el sku vacío que buildCatalog devuelve como "" y no como
+            // NULL: guardarlo tal cual chocaría con el UNIQUE de variants.sku
+            // apenas hubiera dos variantes sin código.
+            if (raw == null || raw === "") return null;
+            return cast(raw);
+          };
+          const compareAt = optional("compare_at", s.compare_at, v => Math.round(Number(v)));
+          const cost = optional("cost", s.cost, v => Math.round(Number(v)));
+          const sku = optional("sku", s.sku, v => String(v).trim() || null);
 
           if (!s.variant_id) {
             const r = INSERT_VARIANT.run({
@@ -513,10 +533,10 @@ router.put("/:id/save", (req, res) => {
               storage: s.s || "—",
               color: s.color || null,
               price,
-              compare_at_price: optional(s.compare_at, v => Math.round(Number(v))),
-              cost: optional(s.cost, v => Math.round(Number(v))),
+              compare_at_price: compareAt,
+              cost,
               stock: 0, // el stock inicial entra como movimiento, para que quede en el kardex
-              sku: optional(s.sku, v => String(v).trim()),
+              sku,
               position: sIdx,
               is_active: s.is_active ? 1 : 0,
             });
@@ -530,13 +550,12 @@ router.put("/:id/save", (req, res) => {
               storage: s.s ?? null,
               color: s.color ?? null,
               price,
-              compare_at_price: optional(s.compare_at, v => Math.round(Number(v))),
-              cost: optional(s.cost, v => Math.round(Number(v))),
-              sku: optional(s.sku, v => String(v).trim()),
+              compare_at_price: compareAt,
+              cost,
+              sku,
               position: sIdx,
               is_active: s.is_active == null ? null : (s.is_active ? 1 : 0),
             });
-            const origVar = (origModel?.storages || []).find(x => Number(x.variant_id) === variantId);
             const origStock = origVar ? Number(origVar.stock) || 0 : 0;
             if (targetStock !== origStock) {
               stockOps.push({ variant_id: variantId, delta: targetStock - origStock, note: "Ajuste desde el editor" });

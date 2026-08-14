@@ -180,8 +180,16 @@ function renderAll() {
     if (cWrap.previousElementSibling) cWrap.previousElementSibling.style.display = showColors ? "block" : "none";
   }
 
-  // Pricing
+  // Pricing. `compare_at` es opcional: solo tiene sentido mostrarlo si es MAYOR
+  // que el precio de venta (si no, no es un "antes", es un error de carga).
   $("#product-price").textContent = fmtCLP(variant.p);
+  const cmpEl = $("#product-compare");
+  if (cmpEl) {
+    const cmp = Number(variant.compare_at) || 0;
+    const show = cmp > variant.p;
+    cmpEl.hidden = !show;
+    cmpEl.textContent = show ? `Antes ${fmtCLP(cmp)}` : "";
+  }
 
   // Description / tagline from specs
   const specs = window.getSpecsFor(phone.id, model.name) || {};
@@ -210,25 +218,30 @@ function renderAll() {
 }
 
 // Render gallery thumbnails (imagen principal + galería subida). Oculto si ≤1 imagen.
+// El `alt` de cada foto se edita en el admin (tabla images); si está vacío
+// caemos al nombre del modelo, que siempre es mejor que un alt en blanco.
 function renderThumbs(model, mainImg) {
   const wrap = $("#product-thumbs");
   if (!wrap) return;
-  const urls = [];
-  if (mainImg) urls.push(mainImg);
-  (model.gallery || []).forEach(g => { if (g && g.url && !urls.includes(g.url)) urls.push(g.url); });
+  const shots = [];
+  if (mainImg) shots.push({ url: mainImg, alt: model.name });
+  (model.gallery || []).forEach(g => {
+    if (g && g.url && !shots.some(s => s.url === g.url)) shots.push({ url: g.url, alt: g.alt || model.name });
+  });
   wrap.innerHTML = "";
-  if (urls.length < 2) { wrap.style.display = "none"; return; }
+  if (shots.length < 2) { wrap.style.display = "none"; return; }
   wrap.style.display = "flex";
-  urls.forEach(u => {
+  shots.forEach(shot => {
     const btn = el("button", {
-      class: "product-thumb" + (u === mainImg ? " active" : ""),
+      class: "product-thumb" + (shot.url === mainImg ? " active" : ""),
       type: "button",
       onclick: () => {
-        $("#product-img").src = u;
+        $("#product-img").src = shot.url;
+        $("#product-img").alt = shot.alt;
         wrap.querySelectorAll(".product-thumb").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
       },
-    }, [el("img", { src: u, alt: model.name, loading: "lazy" })]);
+    }, [el("img", { src: shot.url, alt: shot.alt, loading: "lazy" })]);
     wrap.appendChild(btn);
   });
 }

@@ -67,6 +67,9 @@
                 :title="item.label">
           <span class="ac-nav-icon" x-html="item.icon"></span>
           <span class="ac-nav-label" x-text="item.label"></span>
+          <span class="ac-nav-badge" x-show="navBadge(item.id) > 0"
+                :title="item.id === 'orders' ? 'Órdenes pagadas sin despachar' : 'Variantes con stock crítico'"
+                x-text="navBadge(item.id)"></span>
         </button>
       </template>
     </nav>
@@ -792,13 +795,16 @@
   </div>
 
   <!-- ========== EDITOR DE PRODUCTO ========== -->
-  <div class="ac-drawer-overlay" x-show="prodEditor.open" @click="prodEditor.open = false" x-cloak></div>
+  <div class="ac-drawer-overlay" x-show="prodEditor.open" @click="closeProductEditor()" x-cloak></div>
   <aside class="ac-drawer ac-drawer-wide" :class="{ open: prodEditor.open }">
     <template x-if="prodEditor.draft">
       <div style="display:flex;flex-direction:column;height:100%">
         <header class="ac-drawer-head">
-          <h2>Editar — iPhone <span x-text="prodEditor.draft.line"></span></h2>
-          <button class="ac-icon-btn" @click="prodEditor.open = false">✕</button>
+          <h2>
+            Editar — iPhone <span x-text="prodEditor.draft.line"></span>
+            <span class="ac-dirty-dot" x-show="prodEditorDirty" title="Cambios sin guardar">●</span>
+          </h2>
+          <button class="ac-icon-btn" @click="closeProductEditor()">✕</button>
         </header>
         <div class="ac-edit-body">
           <div class="ac-edit-grid">
@@ -847,12 +853,17 @@
                            @dragstart="galleryDragStart(model, gi)"
                            @dragover.prevent
                            @drop.prevent="galleryDrop(model, gi)">
-                        <img :src="img.url" alt="" draggable="false" />
+                        <img :src="img.url" :alt="img.alt || ''" draggable="false" />
                         <div class="ac-media-actions">
                           <button class="ac-media-btn" x-show="img.url !== model.img" @click="setModelMainImage(model, img.url)" title="Hacer principal">★</button>
                           <button class="ac-media-btn" @click="deleteModelImage(model, img)" title="Eliminar">✕</button>
                         </div>
                         <span class="ac-media-main-badge" x-show="img.url === model.img">Principal</span>
+                        <!-- Texto alternativo: lo usa el <img alt> público (SEO
+                             + lectores de pantalla). Se guarda al salir del campo. -->
+                        <input class="ac-media-alt" :value="img.alt || ''"
+                               @change="saveImageAlt(img, $event.target.value)"
+                               placeholder="Texto alt" title="Texto alternativo de la foto" />
                       </div>
                     </template>
                     <label class="ac-media-drop" @dragover.prevent @drop.prevent="uploadModelImages(model, $event.dataTransfer.files)">
@@ -874,7 +885,8 @@
                   <div class="ac-edit-variants-scroll">
                     <table class="ac-edit-variants">
                       <thead><tr>
-                        <th>Color</th><th>Precio</th><th>Costo</th><th>Margen</th>
+                        <th>Color</th><th>Precio</th><th title="Precio tachado en la web. Vacío = no se muestra.">Antes</th>
+                        <th>Costo</th><th>Margen</th>
                         <th>Stock</th><th>SKU</th><th>Activo</th><th></th>
                       </tr></thead>
                       <tbody>
@@ -882,6 +894,8 @@
                           <tr :class="{ 'ac-var-off': !st.is_active }">
                             <td><input x-model="st.color" placeholder="Color" /></td>
                             <td><input type="number" class="ac-mono" x-model.number="st.p" /></td>
+                            <!-- "Antes": precio de referencia tachado. Vacío = no se publica. -->
+                            <td><input type="number" class="ac-mono" x-model="st.compare_at" placeholder="—" /></td>
                             <!-- El costo es interno: nunca sale en /data.js, solo alimenta el margen y el CSV. -->
                             <td><input type="number" class="ac-mono" x-model="st.cost" placeholder="—" /></td>
                             <td class="ac-var-margin">
@@ -907,12 +921,14 @@
           </template>
           <button class="ac-btn-ghost" @click="addModelDraft()">+ Agregar modelo</button>
 
-          <div class="ac-edit-danger">
+          <!-- Borrar el producto entero es solo de admin (el backend responde
+               403): no mostramos un botón que va a fallar. -->
+          <div class="ac-edit-danger" x-show="isAdmin">
             <button class="ac-btn-danger" @click="deleteProduct()">Eliminar producto completo</button>
           </div>
         </div>
         <footer class="ac-edit-foot">
-          <button class="ac-btn-ghost" @click="prodEditor.open = false">Descartar</button>
+          <button class="ac-btn-ghost" @click="closeProductEditor()">Descartar</button>
           <button class="ac-btn-primary" @click="saveProductDraft()" :disabled="prodEditor.saving" x-text="prodEditor.saving ? 'Guardando…' : 'Guardar cambios'"></button>
         </footer>
       </div>

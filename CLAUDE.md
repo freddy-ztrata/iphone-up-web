@@ -258,19 +258,26 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 - **Catálogo dinámico**: `/data.js` se sirve desde DB con ETag — al cambiar un precio en admin el navegador hace 304 hasta que cambia el hash. Cuando `USE_DB_CATALOG=false`, sirve el archivo físico (fallback de emergencia).
 
 **Vistas del admin** (todas en `admin.html`, switching con `view` state):
-1. Dashboard — KPIs en vivo + sparkline + top productos + feed de actividad
-2. Catálogo — tabla densa con inline edit de precio (doble-click) y stock (click en pill)
-3. Stock — pivote modelos × storages
-4. Cupones — cards tipo ticket, CRUD completo
-5. Órdenes — lista filtrable + drawer con detalle + WhatsApp deep-link
-6. Settings — tabs Usuarios / Audit log / Sistema. La tab **Sistema** incluye la **Comisión medio de pago** (switch on/off + % editable → `PATCH /api/admin/settings/payment-fee`).
+1. Dashboard — KPIs en vivo + sparkline + top productos + feed de actividad + **stock crítico accionable** (±1 y kardex sin salir de la vista)
+2. Analítica — tiempo real (visitantes activos, refresh cada 12s) + sesiones/ingresos por día + top páginas y referidos
+3. Catálogo — 1 fila por modelo; el editor es un drawer con **borrador** (nada se guarda hasta "Guardar cambios" → `PUT /api/admin/products/:id/save`, una sola transacción). Por variante: color, precio, **precio antes (`compare_at_price`)**, costo, margen calculado, stock, SKU y activo. Galería con drag&drop, foto principal y **texto alternativo por imagen**.
+4. Stock — pivote capacidad × color por modelo
+5. Cupones — cards tipo ticket, CRUD completo (crear y editar usan el mismo formulario)
+6. Órdenes — búsqueda + filtros (pago/envío/canal/fechas) + paginación server-side, export CSV, alta manual, y drawer con tabs Detalle / Preparación / Historial
+7. Settings — tabs Usuarios / Audit log / Sistema. La tab **Sistema** incluye la **Comisión medio de pago** (switch on/off + % editable → `PATCH /api/admin/settings/payment-fee`) y los **precios de recompra** (trade-in editable como JSON).
 
-**Atajos**: `⌘K` command palette, `G+P/O/S/C/D/U` navegación, `Esc` cerrar drawer/palette.
+**Atajos**: `⌘K` command palette (navega, crea, exporta y abre productos/órdenes por nombre), `G+P/O/S/C/D/U` navegación, `Esc` cerrar drawer/palette.
+
+**Badges del sidebar**: `navBadge(id)` en `admin.js` pinta un contador sobre Órdenes (pagadas sin despachar) y Stock (variantes ≤2). Sale del `/api/admin/dashboard` que ya se carga; en 0 no se muestra nada.
+
+**2FA: NO implementado y sin infraestructura.** No hay librería TOTP, ni columna de secreto en `users`, ni flujo de recovery codes. Agregarlo implica una dependencia npm nueva (p.ej. `otplib`) + migración + pantalla de enrolamiento; hoy la defensa del login es bcrypt + rate-limit 10/15min + sesión httpOnly. Si se pide, tratarlo como feature propia, no como ajuste.
 
 **Bootstrap del primer usuario**: si la tabla `users` está vacía al boot y existen `ADMIN_BOOTSTRAP_EMAIL/PASSWORD`, se crea automáticamente. Después se pueden borrar esas env vars; el script `npm run create-user` permite agregar más.
 
 ## Things to be careful with
 
+- **`PUT /api/admin/products/:id/save` distingue "key ausente" de "key vacía"** en los campos opcionales de cada variante (`compare_at`, `cost`, `sku`): si la key **no viene**, conserva lo que hay en la DB; si viene como `null`/`""`, lo borra. Por eso el editor manda SIEMPRE las tres keys aunque estén vacías (ver `saveProductDraft()` en `admin.js`). Si agregás otro campo opcional, seguí el mismo patrón — mandarlo como `undefined` desde el front significaba "borralo" y se perdían datos en cada guardado.
+- **El resolver de variante para descontar stock es `stock.findVariantForItem()`**, no una query propia: desde la migración 005 el **color** es parte de la identidad de la variante, así que un `WHERE modelo AND storage LIMIT 1` descuenta de un color al azar. (Había un `findVariantId()` así en `catalog.js`; se eliminó por eso.)
 - **Don't change the cart shape** without updating `app.js`, `product.js`, `checkout.js` **and** `server/routes/mercadopago.js`. The schema `{model, storage, color, price, sealed, phoneId, img}` is the cross-page + cross-stack contract (`phoneId` = id de la línea, `model` = nombre del modelo — NO los cambies a model_id/slug o se rompen cupones/stock/MP).
 - **Comisión medio de pago** (3,5% por default, **editable y desactivable** en admin → Ajustes → Sistema). Se guarda en `settings` (`server/lib/settings.js`), se expone como `window.PAY_FEE = {rate, enabled}` en `/data.js`, y se suma como ítem en la preference (`getPaymentFee()` en `server/routes/mercadopago.js`). Front y back calculan igual (`round(subtotal × rate)`) para que **lo mostrado = lo cobrado**. El desglose aparece en carrito, checkout y MP; si `enabled=false` la línea se oculta y el total = subtotal. Al cambiarla, `/data.js` cambia de ETag y el front la toma al recargar. Para configuración editable nueva, seguí este patrón (settings lib + ruta admin + `window.*` en buildDataJs), no hardcodees.
 - **Este repo vive en una carpeta de OneDrive** — la sincronización puede revertir/pisar ediciones locales (síntoma: avisos de "modified on disk", cambios que "desaparecen"). Los deploys leen el archivo local al momento del push (GitHub Git Data API), así que verificá en producción tras pushear; si un cambio no aparece, re-aplicá y re-pusheá.
@@ -278,9 +285,9 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 - **Don't commit `.env`** — está en `.gitignore`. Las credenciales reales viven solo en Dokploy.
 - **Don't add tests, lint configs, or CI** — there's no test runner and adding one would force a build dependency.
 - **Address text appears in several places**: meta description, store card title + sub, footer link, Google Maps deep-link href, and the `Store` JSON-LD (`streetAddress`) in `index.html`. Keep them in sync.
-- **Don't re-introduce phone numbers or WhatsApp buttons** unless asked — they were removed on purpose (the number was a placeholder); contact is Instagram `@iphoneup.cl`. If a real number arrives, also add `telephone` to the `Store` JSON-LD.
+- **WhatsApp SÍ está en el sitio hoy** (`+56 9 8326 5824`): botón flotante en index/product/checkout, CTA en la ficha de producto, link en el footer, deep-link del formulario de recompra en `app.js` y `telephone` en el `Store` JSON-LD de `index.html`. La regla vieja de "solo Instagram / sin teléfono" quedó obsoleta cuando llegó el número real. Si hay que cambiarlo, **son 7 lugares** — grepeá `wa.me` y `telephone` y actualizalos todos juntos.
 - **Si tocas el backend, valida con `/api/health`** antes de pushear — confirma que las env vars y las dependencias estén OK.
-- **No agregar dependencias npm pesadas** — el Dockerfile hace `npm install --omit=dev` cada build. Cada paquete extra es tiempo de deploy. Hoy: `express`, `dotenv`, `mercadopago` (+ `node-fetch` declarado pero **sin usar** — el código usa el `fetch` global de Node 20). Para convertir imágenes usa `sharp` con `--no-save`, nunca como dependencia del repo.
+- **No agregar dependencias npm pesadas** — el Dockerfile hace `npm install --omit=dev` cada build. Cada paquete extra es tiempo de deploy. Hoy: `express`, `dotenv`, `mercadopago`, `helmet`, `express-session` + `better-sqlite3(-session-store)`, `bcryptjs`, `multer`, `express-rate-limit`, `cookie-parser` y **`sharp`** (dependencia real: la usa `server/routes/admin/uploads.js` para convertir a WebP en runtime — no la saques). Para conversiones de imágenes **one-shot fuera del server** (preparar assets del repo) seguí usando `npm install sharp --no-save`.
 - **MP webhook responde 200 inmediato** (`server/routes/mercadopago.js`) y procesa después — si el procesamiento lanza, MP no reintenta. Si agregas lógica crítica en el webhook (emails, etc.), considera reintentos o cola.
 - **El webhook ahora valida firma HMAC** (`server/lib/mp-signature.js`). Si `MP_WEBHOOK_SECRET` no está configurado, el modo es permisivo (acepta todo) — en producción **siempre** configurarlo.
 - **Stock se descuenta solo cuando el pago pasa a `approved`** (no en `pending`/`in_process`). La función `stock.commitOrderSale()` es idempotente por `order_id` — múltiples webhooks del mismo pago no descuentan stock varias veces.

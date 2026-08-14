@@ -190,6 +190,20 @@
   text-align: left;
   font-family: inherit;
 }
+/* Badge de trabajo pendiente. `margin-left:auto` lo empuja al borde derecho
+   cuando el sidebar está expandido; con el sidebar colapsado (sin label) queda
+   flotando sobre el ícono, que es donde se espera ver la alerta. */
+.ac-nav-badge {
+  margin-left: auto;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent); color: #000;
+  font-size: 10px; font-weight: 800; line-height: 18px; text-align: center;
+}
+.ac-sidebar:not(.ac-sidebar-expanded) .ac-nav-badge {
+  position: absolute; top: 4px; right: 4px; margin-left: 0;
+}
+.ac-sidebar:not(.ac-sidebar-expanded) .ac-nav-item { position: relative; }
 .ac-nav-item:hover { background: var(--surface-2); color: var(--text); }
 .ac-nav-item.active {
   background: var(--accent-soft-bg);
@@ -730,15 +744,24 @@
 .ac-media-current { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-mute); }
 .ac-media-current img { width: 56px; height: 56px; object-fit: contain; border-radius: 10px; border: 1px solid var(--border-glow); background: var(--surface-2); padding: 4px; }
 .ac-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
-.ac-media-item { position: relative; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 5px; cursor: grab; }
+/* La miniatura es cuadrada; el input de texto alternativo va debajo, dentro de
+   la misma tarjeta (por eso el aspect-ratio vive en el <img>, no en el tile). */
+.ac-media-item { position: relative; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 5px; cursor: grab; display: flex; flex-direction: column; gap: 4px; }
 .ac-media-item:active { cursor: grabbing; }
 .ac-media-item.is-main { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.ac-media-item img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.ac-media-item img { width: 100%; aspect-ratio: 1; object-fit: contain; pointer-events: none; }
+.ac-media-alt {
+  width: 100%; min-width: 0;
+  background: var(--surface-3); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 3px 6px; font-size: 10px; font-family: inherit;
+}
+.ac-media-alt:focus { outline: none; border-color: var(--accent); }
+.ac-media-alt::placeholder { color: var(--text-mute); }
 .ac-media-actions { position: absolute; top: 3px; right: 3px; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
 .ac-media-item:hover .ac-media-actions { opacity: 1; }
 .ac-media-btn { width: 22px; height: 22px; border-radius: 6px; border: none; background: rgba(0,0,0,0.72); color: #fff; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .ac-media-btn:hover { background: var(--accent); color: #000; }
-.ac-media-main-badge { position: absolute; bottom: 3px; left: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #000; padding: 2px 5px; border-radius: 5px; }
+.ac-media-main-badge { position: absolute; bottom: 28px; left: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #000; padding: 2px 5px; border-radius: 5px; }
 .ac-media-drop { aspect-ratio: 1; border: 1.5px dashed var(--border-strong); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; line-height: 1.3; color: var(--text-mute); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .ac-media-drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft-bg); }
 
@@ -1038,7 +1061,11 @@
 
 /* ============== EDITOR: costo / margen ============== */
 .ac-edit-variants-scroll { overflow-x: auto; }
-.ac-edit-variants { min-width: 560px; }
+/* 8 columnas editables: por debajo de esto los inputs se aplastan, así que
+   preferimos scroll horizontal antes que campos de 20px en mobile. */
+.ac-edit-variants { min-width: 660px; }
+/* Punto de "sin guardar" en el título del editor. */
+.ac-dirty-dot { color: var(--accent); font-size: 11px; vertical-align: middle; margin-left: 4px; }
 .ac-edit-variants td:last-child { width: 36px; }
 .ac-var-margin { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .ac-var-margin-na { color: var(--text-mute); font-weight: 400; }
@@ -1056,6 +1083,9 @@
   .ac-sidebar, .ac-app:has(.ac-sidebar-expanded) .ac-sidebar { width: 64px; padding: 12px 6px; }
   .ac-main, .ac-app:has(.ac-sidebar-expanded) .ac-main { margin-left: 64px; }
   .ac-nav-label, .ac-search-placeholder, .ac-user-name { display: none; }
+  /* Sin label no hay a dónde empujar el badge: va encima del ícono. */
+  .ac-nav-item { position: relative; }
+  .ac-nav-badge { position: absolute; top: 4px; right: 4px; margin-left: 0; }
   .ac-search { padding: 8px 12px; }
   .ac-content { padding: 16px 14px 64px; }
   .ac-page-title { font-size: 22px; }

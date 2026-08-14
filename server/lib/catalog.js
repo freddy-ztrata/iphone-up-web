@@ -84,6 +84,9 @@ function buildCatalog(opts = {}) {
           storage.variant_id = v.id;
           storage.sku = v.sku || "";
           storage.cost = v.cost == null ? null : v.cost;
+          // Explícito incluso cuando es null: el editor bindea este campo y
+          // necesita distinguir "sin precio antes" de "no vino en la respuesta".
+          storage.compare_at = v.compare_at_price == null ? null : v.compare_at_price;
         }
         if (includeInactive) storage.is_active = !!v.is_active;
         return storage;
@@ -240,18 +243,10 @@ window.cartStore = {
   return { body: js, etag };
 }
 
-// Resuelve el variant_id a partir de {phoneId, model, storage} — útil para
-// descontar stock cuando MP confirma un pago.
-function findVariantId({ phoneId, model, storage }) {
-  const row = db.prepare(`
-    SELECT v.id
-    FROM variants v
-    JOIN product_models m ON m.id = v.model_id
-    JOIN products p ON p.id = m.product_id
-    WHERE p.id = ? AND m.name = ? AND v.storage = ?
-    LIMIT 1
-  `).get(phoneId, model, storage);
-  return row ? row.id : null;
-}
+// NOTA: acá vivía findVariantId({phoneId, model, storage}), que resolvía la
+// variante ignorando el COLOR y cortaba con LIMIT 1 — desde la migración 005 el
+// color es parte de la identidad de la variante, así que descontaba stock de un
+// color al azar. El resolver bueno es stock.findVariantForItem() (intenta match
+// exacto con color y recién después cae al fallback). No lo reintroduzcas acá.
 
-module.exports = { buildCatalog, buildPublicCatalog, buildDataJs, findVariantId };
+module.exports = { buildCatalog, buildPublicCatalog, buildDataJs };

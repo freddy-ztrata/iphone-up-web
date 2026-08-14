@@ -129,7 +129,7 @@ function adminApp() {
           else if (this.bulkPrice.open) this.closeBulkPrice();
           else if (this.userEditor.open) this.userEditor.open = false;
           else if (this.orderDrawer.open) this.closeOrderDrawer();
-          else if (this.prodEditor.open) this.prodEditor.open = false;
+          else if (this.prodEditor.open) this.closeProductEditor();
           return;
         }
 
@@ -219,6 +219,16 @@ function adminApp() {
     // Vistas visibles según rol (el sidebar itera sobre esto, no sobre `nav`).
     get visibleNav() {
       return this.isAdmin ? this.nav : this.nav.filter(n => n.id !== "settings");
+    },
+
+    // Contador rojo en el sidebar: lo que hay que HACER, no lo que hay.
+    // Órdenes = pagadas sin despachar (la cola del día). Stock = variantes en
+    // 2 unidades o menos. 0 ⇒ no se pinta nada (un badge en 0 es ruido).
+    navBadge(id) {
+      if (!this.dashboard) return 0;
+      if (id === "orders") return Number(this.dashboard.to_fulfill) || 0;
+      if (id === "stock") return (this.dashboard.critical_stock || []).length;
+      return 0;
     },
 
     // ----- Data loaders -----
@@ -498,11 +508,26 @@ function adminApp() {
       this.prodEditor.open = true;
     },
 
-    // --- Mutaciones SOLO en el borrador (no tocan el servidor hasta Guardar) ---
-    addVariantDraft(model) {
-      const last = model.storages[model.storages.length - 1];
-      model.storages.push({ s: "128GB", color: "", p: last ? last.p : 0, stock: 0, cost: "", sku: "", variant_id: null, is_active: false });
+    // ¿El borrador difiere de lo que se abrió? Se compara contra la copia que
+    // guardamos al abrir el editor; las fotos NO cuentan porque se suben al
+    // servidor en el momento (no son parte del borrador).
+    get prodEditorDirty() {
+      const { draft, original } = this.prodEditor;
+      if (!draft || !original) return false;
+      const strip = p => JSON.stringify(p, (k, v) => (k === "gallery" || k === "_k" ? undefined : v));
+      return strip(draft) !== strip(original);
     },
+
+    // Cerrar el editor descartaba los cambios sin avisar. Con un formulario de
+    // decenas de campos eso es perder trabajo real, así que preguntamos.
+    async closeProductEditor() {
+      if (this.prodEditorDirty && !(await this.askConfirm("Tenés cambios sin guardar en este producto. ¿Descartarlos?"))) return;
+      this.prodEditor.open = false;
+      this.prodEditor.draft = null;
+      this.prodEditor.original = null;
+    },
+
+    // --- Mutaciones SOLO en el borrador (no tocan el servidor hasta Guardar) ---
     removeVariantDraft(model, st) {
       model.storages = model.storages.filter(x => x !== st);
     },
@@ -537,10 +562,10 @@ function adminApp() {
     colorsOfSize(model, size) { return (model.storages || []).filter(v => v.s === size); },
     addColorToSize(model, size) {
       const sib = (model.storages || []).find(v => v.s === size);
-      model.storages.push({ s: size, color: "", p: sib ? sib.p : 0, stock: 0, cost: sib && sib.cost != null ? sib.cost : "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+      model.storages.push({ s: size, color: "", p: sib ? sib.p : 0, stock: 0, cost: sib && sib.cost != null ? sib.cost : "", compare_at: "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
     },
     addSizeDraft(model) {
-      model.storages.push({ s: "Nueva", color: "", p: 0, stock: 0, cost: "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
+      model.storages.push({ s: "Nueva", color: "", p: 0, stock: 0, cost: "", compare_at: "", sku: "", variant_id: null, is_active: false, _k: Math.random().toString(36).slice(2) });
     },
     removeSize(model, size) { model.storages = model.storages.filter(v => v.s !== size); },
     renameSize(model, oldSize, newSize) {
@@ -631,6 +656,10 @@ function adminApp() {
               p: Math.round(Number(s.p)) || 0,
               stock: Math.round(Number(s.stock)) || 0,
               cost: s.cost === "" || s.cost == null ? null : Math.round(Number(s.cost)),
+              // Siempre mandamos la key aunque esté vacía: el backend conserva
+              // el valor guardado cuando NO viene, así que omitirla haría
+              // imposible borrar un "precio antes" desde el editor.
+              compare_at: s.compare_at === "" || s.compare_at == null ? null : Math.round(Number(s.compare_at)),
               sku: s.sku || "",
               is_active: !!s.is_active,
             })),
@@ -710,6 +739,20 @@ function adminApp() {
 
     setModelMainImage(model, url) {
       model.img = url; // en el borrador; se persiste al Guardar
+    },
+
+    // El texto alternativo se guarda al vuelo (no espera al "Guardar cambios"
+    // del producto) porque la imagen ya vive en el servidor: el borrador solo
+    // arrastra la URL. Lo lee product.js para el <img alt> del sitio público,
+    // que es lo que leen Google y los lectores de pantalla.
+    async saveImageAlt(img, value) {
+      const alt = String(value ?? "").trim();
+      if (alt === (img.alt || "")) return;
+      try {
+        await this.api("PATCH", "/uploads/image/" + img.id, { alt });
+        img.alt = alt;
+        this.toast("Texto alternativo guardado", "success");
+      } catch (err) { this.toast(err.message, "error"); }
     },
 
     async deleteModelImage(model, img) {
@@ -1148,6 +1191,10 @@ function adminApp() {
         });
         row.stock = updated.stock;
         this.toast(`Stock: ${updated.stock}`, "success");
+        // Al pasar el umbral la fila deja de ser crítica: recargamos para que
+        // salga de la lista (y el badge del sidebar baje) en vez de quedar
+        // mostrando una alerta ya resuelta.
+        if (updated.stock > 2) this.loadDashboard();
       } catch (err) { this.toast(err.message, "error"); }
     },
     criticalLabel(row) {
