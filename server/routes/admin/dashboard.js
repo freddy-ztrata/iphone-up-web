@@ -93,6 +93,18 @@ router.get("/", (_req, res) => {
     LIMIT 20
   `).all();
 
+  // Carritos recuperables: vivos, con email capturado y consentimiento. Es el
+  // número que pinta el badge del sidebar (lo que hay que hacer, no lo que hay).
+  let recoverableCarts = 0;
+  try {
+    recoverableCarts = db.prepare(`
+      SELECT COUNT(*) AS n FROM carts
+      WHERE status IN ('active','recovered') AND consent = 1
+        AND email IS NOT NULL AND email != '' AND item_count > 0
+        AND expires_at > datetime('now')
+    `).get().n;
+  } catch { /* la tabla puede no existir en una DB anterior a la migración 007 */ }
+
   res.json({
     sales: {
       today: salesToday,
@@ -102,6 +114,7 @@ router.get("/", (_req, res) => {
     pending: pending.n,
     to_fulfill: toFulfill.n,
     critical_stock: critical,
+    recoverable_carts: recoverableCarts,
     sparkline,
     top_products: top,
     recent_activity: recent,

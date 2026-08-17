@@ -203,6 +203,17 @@ function buildDataJs() {
   // siguen hardcodeados — son texto editorial, no operación diaria.
   const extras = require("./catalog-extras");
 
+  // Captura del email del checkout para recordar carros abandonados. Se resuelve
+  // acá afuera y no interpolado en el template: el string de abajo está delimitado
+  // por backticks, así que cualquier backtick de un comentario (o de un
+  // identificador entre acentos graves) lo cortaría y el módulo no cargaría —
+  // rompiendo el boot entero del server, no solo /data.js.
+  const emailCfg = require("./settings").getEmailConfig();
+  const cartCapture = {
+    enabled: emailCfg.enabled && emailCfg.captureEnabled,
+    expireDays: emailCfg.cartExpireDays,
+  };
+
   const js = `// AUTOGENERADO — fuente de verdad en SQLite. NO EDITAR a mano.
 // Generado el ${new Date().toISOString()}
 window.CATALOG = ${JSON.stringify(catalog, null, 2)};
@@ -216,6 +227,10 @@ window.FAQS = ${JSON.stringify(extras.FAQS, null, 2)};
 window.TRADEIN_PRICES = ${JSON.stringify(require("./settings").getTradeinPrices(), null, 2)};
 
 window.PAY_FEE = ${JSON.stringify(require("./settings").getPaymentFee())};
+
+// Captura del email del checkout para recordar carros abandonados.
+// "enabled" se apaga desde Ajustes → Emails; el frontend deja de postear en false.
+window.CART_CAPTURE = ${JSON.stringify(cartCapture)};
 
 window.fmtCLP = (n) => "$" + n.toLocaleString("es-CL");
 

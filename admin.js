@@ -25,6 +25,26 @@ function adminApp() {
     tradein: { text: "", isDefault: true, loading: false, saving: false },
     loadingProducts: false,
 
+    // Carritos abandonados
+    carts: [],
+    cartSummary: null,
+    cartQuery: { status: "", q: "", has_email: "", from: "", to: "" },
+    cartPage: { total: 0, limit: 50, offset: 0, hasMore: false },
+    loadingCarts: false,
+    cartDrawer: { open: false, loading: false, cart: null, reminding: false },
+
+    // Emails: config + log + supresiones
+    emails: {
+      config: null, provider: null, scheduler: null, stats: null, pending: null,
+      loading: false, saving: false, testing: false, running: false, testTo: "",
+    },
+    emailLog: [],
+    emailLogQuery: { template: "", status: "", to_email: "" },
+    emailLogPage: { total: 0, limit: 50, offset: 0, hasMore: false },
+    loadingEmailLog: false,
+    suppressions: [],
+    suppressionForm: { email: "", reason: "manual", saving: false },
+
     // Órdenes: filtros + paginación (el server pagina; nunca traemos las 500 de una).
     orderQuery: { q: "", status: "", fulfillment_status: "", channel: "", from: "", to: "" },
     orderPage: { total: 0, limit: 50, offset: 0, hasMore: false },
@@ -84,6 +104,29 @@ function adminApp() {
       { id: "other",       label: "Otro" },
     ],
 
+    // Estados de carrito — mismos valores que el CHECK de la migración 007.
+    CART_STATES: [
+      { id: "active",    label: "Activo" },
+      { id: "recovered", label: "Volvió por el link" },
+      { id: "converted", label: "Compró" },
+      { id: "expired",   label: "Vencido" },
+    ],
+    // Estados de email_log (server/migrations/007_emails_carts.sql).
+    EMAIL_STATES: [
+      { id: "sent",       label: "Enviado" },
+      { id: "dry_run",    label: "Dry-run" },
+      { id: "queued",     label: "En cola" },
+      { id: "failed",     label: "Falló" },
+      { id: "suppressed", label: "Excluido" },
+      { id: "disabled",   label: "Desactivado" },
+    ],
+    SUPPRESSION_REASONS: [
+      { id: "manual",      label: "Manual" },
+      { id: "unsubscribe", label: "Se dio de baja" },
+      { id: "bounce",      label: "Rebote" },
+      { id: "complaint",   label: "Marcó spam" },
+    ],
+
     nav: [
       { id: "dashboard", label: "Dashboard", icon: "◐" },
       { id: "analytics", label: "Analítica", icon: "📈" },
@@ -91,6 +134,7 @@ function adminApp() {
       { id: "stock",     label: "Stock",     icon: "◫" },
       { id: "coupons",   label: "Cupones",   icon: "🎟" },
       { id: "orders",    label: "Órdenes",   icon: "▤" },
+      { id: "carts",     label: "Carritos",  icon: "🛒" },
       { id: "settings",  label: "Ajustes",   icon: "⚙" },
     ],
 
@@ -129,6 +173,7 @@ function adminApp() {
           else if (this.bulkPrice.open) this.closeBulkPrice();
           else if (this.userEditor.open) this.userEditor.open = false;
           else if (this.orderDrawer.open) this.closeOrderDrawer();
+          else if (this.cartDrawer.open) this.closeCartDrawer();
           else if (this.prodEditor.open) this.closeProductEditor();
           return;
         }
@@ -151,7 +196,8 @@ function adminApp() {
           return;
         }
         if (this._gPressed) {
-          const map = { p: "catalog", o: "orders", s: "stock", c: "coupons", d: "dashboard", u: "settings" };
+          // 'r' de "recuperación" — 'c' ya la usan los cupones.
+          const map = { p: "catalog", o: "orders", s: "stock", c: "coupons", d: "dashboard", u: "settings", r: "carts" };
           const target = map[e.key.toLowerCase()];
           if (target) { this.goto(target); this._gPressed = false; }
         }
@@ -211,9 +257,10 @@ function adminApp() {
       if (viewId === "stock") this.loadProducts();
       if (viewId === "coupons") this.loadCoupons();
       if (viewId === "orders") { this.orderPage.offset = 0; this.loadOrders(); }
+      if (viewId === "carts") { this.cartPage.offset = 0; this.loadCarts(); }
       if (viewId === "dashboard") this.loadDashboard();
       if (viewId === "analytics") this.loadAnalytics();
-      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); this.loadPaymentFee(); this.loadTradein(); }
+      if (viewId === "settings") { this.loadUsers(); this.loadSystemInfo(); this.loadPaymentFee(); this.loadTradein(); this.loadEmails(); }
     },
 
     // Vistas visibles según rol (el sidebar itera sobre esto, no sobre `nav`).
@@ -228,7 +275,15 @@ function adminApp() {
       if (!this.dashboard) return 0;
       if (id === "orders") return Number(this.dashboard.to_fulfill) || 0;
       if (id === "stock") return (this.dashboard.critical_stock || []).length;
+      if (id === "carts") return Number(this.dashboard.recoverable_carts) || 0;
       return 0;
+    },
+
+    navBadgeTitle(id) {
+      if (id === "orders") return "Órdenes pagadas sin despachar";
+      if (id === "stock") return "Variantes con stock crítico";
+      if (id === "carts") return "Carritos con email capturado sin comprar";
+      return "";
     },
 
     // ----- Data loaders -----
@@ -395,6 +450,253 @@ function adminApp() {
         this.tradein.isDefault = true;
         this.toast("Precios restaurados", "success");
       } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    // ----- Carritos abandonados -----
+    cartQueryString(extra = {}) {
+      const p = new URLSearchParams();
+      for (const [k, v] of Object.entries(this.cartQuery)) {
+        if (v !== "" && v != null) p.set(k, v);
+      }
+      for (const [k, v] of Object.entries(extra)) p.set(k, v);
+      return p.toString();
+    },
+
+    async loadCarts({ append = false } = {}) {
+      this.loadingCarts = true;
+      if (!append) this.cartPage.offset = 0;
+      try {
+        const qs = this.cartQueryString({ limit: this.cartPage.limit, offset: this.cartPage.offset });
+        const data = await this.api("GET", "/carts?" + qs);
+        this.carts = append ? [...this.carts, ...data.carts] : data.carts;
+        if (data.page) this.cartPage = { ...this.cartPage, ...data.page };
+        if (data.summary) this.cartSummary = data.summary;
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.loadingCarts = false; }
+    },
+
+    async loadMoreCarts() {
+      if (!this.cartPage.hasMore || this.loadingCarts) return;
+      this.cartPage.offset = this.carts.length;
+      await this.loadCarts({ append: true });
+    },
+
+    searchCartsDebounced() {
+      clearTimeout(this._cartSearchTimer);
+      this._cartSearchTimer = setTimeout(() => this.loadCarts(), 300);
+    },
+
+    resetCartFilters() {
+      this.cartQuery = { status: "", q: "", has_email: "", from: "", to: "" };
+      this.loadCarts();
+    },
+
+    get cartFiltersActive() {
+      return Object.values(this.cartQuery).some(v => v !== "" && v != null);
+    },
+
+    async openCartDetail(id) {
+      this.cartDrawer = { open: true, loading: true, cart: null, reminding: false };
+      try {
+        this.cartDrawer.cart = await this.api("GET", "/carts/" + id);
+      } catch (err) {
+        this.toast(err.message, "error");
+        this.cartDrawer.open = false;
+      } finally {
+        this.cartDrawer.loading = false;
+      }
+    },
+
+    closeCartDrawer() { this.cartDrawer.open = false; },
+
+    // Reenvío manual. El backend usa `force`, así que crea una fila nueva de
+    // email_log en vez de rebotar contra la idempotencia del envío automático.
+    async remindCart(kind) {
+      const cart = this.cartDrawer.cart;
+      if (!cart || this.cartDrawer.reminding) return;
+      if (!(await this.askConfirm(`¿Enviar el recordatorio a ${cart.email}?`))) return;
+      this.cartDrawer.reminding = true;
+      try {
+        const { result } = await this.api("POST", `/carts/${cart.id}/remind`, { kind });
+        this.toast(result?.dryRun ? "Enviado en modo dry-run (sin RESEND_API_KEY)" : "Recordatorio enviado ✓", "success");
+        await this.openCartDetail(cart.id);
+        this.loadCarts();
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.cartDrawer.reminding = false; }
+    },
+
+    async deleteCart(id) {
+      if (!(await this.askConfirm("¿Borrar este carrito? No se puede deshacer."))) return;
+      try {
+        await this.api("DELETE", "/carts/" + id);
+        this.toast("Carrito borrado", "success");
+        this.closeCartDrawer();
+        this.loadCarts();
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    cartStateLabel(id) { return this.CART_STATES.find(s => s.id === id)?.label || id || "—"; },
+
+    cartItemsLabel(cart) {
+      const items = cart?.items || [];
+      if (!items.length) return "—";
+      const first = [items[0].model, items[0].storage].filter(Boolean).join(" ");
+      return items.length > 1 ? `${first} +${items.length - 1}` : first;
+    },
+
+    // ----- Emails -----
+    // Sub-pestaña dentro de Ajustes → Emails: 'config' | 'log' | 'suppressions'.
+    emailTab: "config",
+
+    // Entra a Ajustes en la pestaña de emails (lo usa el command palette).
+    openEmailSettings(subtab = "config") {
+      this.goto("settings");
+      this.settingsTab = "emails";
+      this.setEmailTab(subtab);
+    },
+
+    setEmailTab(tab) {
+      this.emailTab = tab;
+      if (tab === "log") this.loadEmailLog();
+      if (tab === "suppressions") this.loadSuppressions();
+    },
+
+    async loadEmails() {
+      this.emails.loading = true;
+      try {
+        const data = await this.api("GET", "/emails/config");
+        this.emails.config = data.config;
+        this.emails.provider = data.provider;
+        this.emails.scheduler = data.scheduler;
+        this.emails.stats = data.stats;
+        this.emails.pending = data.pending;
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.emails.loading = false; }
+    },
+
+    async saveEmails() {
+      if (this.emails.saving || !this.emails.config) return;
+      this.emails.saving = true;
+      try {
+        const c = this.emails.config;
+        const { config } = await this.api("PATCH", "/emails/config", {
+          enabled: !!c.enabled,
+          from: c.from,
+          // "" es un valor válido y significa "borrar / volver al default".
+          replyTo: c.replyTo ?? "",
+          internalTo: c.internalTo ?? "",
+          cartRemindersEnabled: !!c.cartRemindersEnabled,
+          cartReminder1hEnabled: !!c.cartReminder1hEnabled,
+          cartReminder24hEnabled: !!c.cartReminder24hEnabled,
+          cartReminder1hHours: Number(c.cartReminder1hHours),
+          cartReminder24hHours: Number(c.cartReminder24hHours),
+          cartExpireDays: Number(c.cartExpireDays),
+          cartCouponCode: c.cartCouponCode ?? "",
+          followupEnabled: !!c.followupEnabled,
+          followupDays: Number(c.followupDays),
+          captureEnabled: !!c.captureEnabled,
+        });
+        this.emails.config = config;
+        await this.loadEmails();
+        this.toast("Configuración de emails guardada ✓", "success");
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.emails.saving = false; }
+    },
+
+    async sendTestEmail() {
+      if (this.emails.testing) return;
+      const to = (this.emails.testTo || "").trim() || this.session?.email;
+      if (!(await this.askConfirm(`¿Enviar un email de prueba a ${to}?`))) return;
+      this.emails.testing = true;
+      try {
+        const { result } = await this.api("POST", "/emails/test", { to: this.emails.testTo || undefined });
+        this.toast(result?.dryRun
+          ? "Renderizado en dry-run (sin RESEND_API_KEY no se envía nada)"
+          : "Email de prueba enviado ✓", "success");
+        this.loadEmailLog();
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.emails.testing = false; }
+    },
+
+    async runEmailScheduler() {
+      if (this.emails.running) return;
+      this.emails.running = true;
+      try {
+        const { result } = await this.api("POST", "/emails/run-scheduler");
+        this.toast(`Ciclo listo: ${result.reminders1h} + ${result.reminders24h} recordatorios, ${result.followups} follow-ups, ${result.expired} vencidos`, "success");
+        await this.loadEmails();
+        this.loadEmailLog();
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.emails.running = false; }
+    },
+
+    async loadEmailLog({ append = false } = {}) {
+      this.loadingEmailLog = true;
+      if (!append) this.emailLogPage.offset = 0;
+      try {
+        const p = new URLSearchParams();
+        for (const [k, v] of Object.entries(this.emailLogQuery)) if (v) p.set(k, v);
+        p.set("limit", this.emailLogPage.limit);
+        p.set("offset", this.emailLogPage.offset);
+        const data = await this.api("GET", "/emails/log?" + p.toString());
+        this.emailLog = append ? [...this.emailLog, ...data.entries] : data.entries;
+        if (data.page) this.emailLogPage = { ...this.emailLogPage, ...data.page };
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { this.loadingEmailLog = false; }
+    },
+
+    async loadMoreEmailLog() {
+      if (!this.emailLogPage.hasMore || this.loadingEmailLog) return;
+      this.emailLogPage.offset = this.emailLog.length;
+      await this.loadEmailLog({ append: true });
+    },
+
+    // Mismo criterio que la búsqueda de órdenes: sin debounce, escribir una
+    // dirección de correo dispara un request por tecla.
+    searchEmailLogDebounced() {
+      clearTimeout(this._emailLogSearchTimer);
+      this._emailLogSearchTimer = setTimeout(() => this.loadEmailLog(), 300);
+    },
+
+    async loadSuppressions() {
+      try {
+        const { suppressions } = await this.api("GET", "/emails/suppressions");
+        this.suppressions = suppressions;
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    async addSuppression() {
+      const f = this.suppressionForm;
+      if (f.saving) return;
+      if (!f.email.trim()) { this.toast("Falta el email", "error"); return; }
+      f.saving = true;
+      try {
+        await this.api("POST", "/emails/suppressions", { email: f.email.trim(), reason: f.reason });
+        this.toast("Agregado a la lista de exclusión", "success");
+        f.email = "";
+        this.loadSuppressions();
+      } catch (err) { this.toast(err.message, "error"); }
+      finally { f.saving = false; }
+    },
+
+    async removeSuppression(email) {
+      if (!(await this.askConfirm(`¿Volver a permitir emails a ${email}?`))) return;
+      try {
+        await this.api("DELETE", "/emails/suppressions/" + encodeURIComponent(email));
+        this.toast("Quitado de la lista", "success");
+        this.loadSuppressions();
+      } catch (err) { this.toast(err.message, "error"); }
+    },
+
+    emailStateLabel(id) { return this.EMAIL_STATES.find(s => s.id === id)?.label || id || "—"; },
+    suppressionReasonLabel(id) { return this.SUPPRESSION_REASONS.find(r => r.id === id)?.label || id || "—"; },
+
+    // Pinta el estado del email con la misma paleta que las órdenes:
+    // enviado ⇒ verde, falló ⇒ rojo, el resto ⇒ ámbar.
+    emailStateClass(status) {
+      if (status === "sent" || status === "dry_run") return "state-approved";
+      if (status === "failed") return "state-rejected";
+      return "state-pending";
     },
 
     // ----- Analítica -----
@@ -1263,8 +1565,14 @@ function adminApp() {
           { label: "Ajuste masivo de precios", hint: "Con vista previa y deshacer", icon: "↗", action: () => { this.goto("catalog"); this.openBulkPrice(); } },
           { label: "Exportar inventario a CSV", icon: "⬇", action: () => this.exportInventory() },
           { label: "Exportar órdenes a CSV", hint: "Respeta los filtros activos", icon: "⬇", action: () => this.exportOrders() },
+          { label: "Configurar emails", hint: "Remitente, recordatorios, follow-up", icon: "✉", action: () => this.openEmailSettings() },
+          { label: "Ver log de emails", hint: "Qué salió y qué falló", icon: "✉", action: () => this.openEmailSettings("log") },
+          { label: "Correr el ciclo de emails ahora", hint: "Sin esperar el intervalo", icon: "↻", action: () => { this.openEmailSettings(); this.runEmailScheduler(); } },
         );
       }
+      items.push(
+        { label: "Carritos sin comprar", hint: "Con email capturado", icon: "🛒", action: () => { this.cartQuery = { status: "active", q: "", has_email: "1", from: "", to: "" }; this.goto("carts"); } },
+      );
 
       // Cada modelo abre su editor; cada orden reciente abre su detalle.
       for (const p of this.products) {

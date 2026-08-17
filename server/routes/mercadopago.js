@@ -16,6 +16,8 @@ const { saveOrder, getOrder, updateOrderStatus } = require("../lib/storage");
 const mpSignature = require("../lib/mp-signature");
 const stockLib = require("../lib/stock");
 const couponsLib = require("../lib/coupons");
+const cartsLib = require("../lib/carts");
+const mailer = require("../lib/mailer");
 const { getPaymentFee } = require("../lib/settings");
 
 const router = express.Router();
@@ -42,7 +44,7 @@ function makeOrderId() {
 //   buyer:    { name, email, phone, rut }
 // }
 router.post("/preference", async (req, res) => {
-  const { items, shipping, buyer } = req.body || {};
+  const { items, shipping, buyer, cartToken } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "items vacío" });
@@ -144,6 +146,14 @@ router.post("/preference", async (req, res) => {
       createdAt: new Date().toISOString(),
     });
 
+    // El carro capturado ya cumplió su función: queda fuera de la cola de
+    // recordatorios. Aislado en try/catch — un problema acá no puede impedir
+    // que el cliente llegue a pagar.
+    if (cartToken) {
+      try { cartsLib.markConverted(String(cartToken), orderId); }
+      catch (err) { console.error("[mp] no se pudo cerrar el carro capturado:", err.message); }
+    }
+
     res.json({
       orderId,
       preferenceId: pref.id,
@@ -239,6 +249,27 @@ router.post("/webhook", async (req, res) => {
       }
       if (order.couponCode) {
         try { couponsLib.incrementUsage(order.couponCode); } catch {}
+      }
+
+      // Emails de la venta. VAN AL FINAL y en su propio try/catch a propósito:
+      // el stock ya se descontó y a MP ya se le respondió 200, así que nada de
+      // esto puede afectar la venta. `sendSafe` tampoco propaga rechazos, pero
+      // el catch cubre una excepción sincrónica al armar el contexto.
+      try {
+        const paid = getOrder(externalRef);
+        if (paid?.buyer?.email) {
+          mailer.sendSafe({
+            template: "order_paid",
+            to: paid.buyer.email,
+            orderId: paid.id,
+            // Un webhook repetido del mismo pago no reenvía: la key es única.
+            idempotencyKey: `order_paid:${paid.id}`,
+            data: { order: paid },
+          });
+        }
+        mailer.notifyInternal(paid);
+      } catch (err) {
+        console.error("[mp webhook] emails de venta:", err.message);
       }
     }
 

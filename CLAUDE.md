@@ -21,11 +21,19 @@ server/migrations/*.sql      → Schema versionado (001_initial.sql, ...)
 server/routes/mercadopago.js → /api/mercadopago/* (Checkout Pro + webhook firmado)
 server/routes/chilexpress.js → /api/chilexpress/* (geo + rating, con fallback)
 server/routes/orders.js      → /api/orders/:id (consulta pública)
-server/routes/admin/*.js     → /api/admin/* (auth, products, coupons, orders, users, audit, uploads, dashboard, analytics, settings)
+server/routes/emails.js      → /api/cart/* (captura/restauración) + /api/emails/* (baja + webhook Resend)
+server/routes/admin/*.js     → /api/admin/* (auth, products, coupons, orders, users, audit, uploads, dashboard, analytics, settings, carts, emails)
 server/middleware/auth.js    → requireAuth + requireRole
 server/lib/catalog.js        → buildCatalog() y buildDataJs() (genera /data.js desde DB)
 server/lib/catalog-extras.js → TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES (aún hardcoded)
-server/lib/settings.js       → get/set de la tabla `settings` (config editable del admin: comisión medio de pago)
+server/lib/settings.js       → get/set de la tabla `settings` (config editable del admin: comisión medio de pago, emails)
+server/lib/resend.js         → Cliente HTTP de Resend (sin SDK). Dry-run si no hay API key
+server/lib/mailer.js         → ÚNICA puerta de salida de emails: settings → exclusiones → idempotencia → render → envío
+server/lib/email-templates.js→ Templates HTML + texto plano (todo dato externo pasa por esc())
+server/lib/email-token.js    → HMAC de los links de baja (unsubscribe)
+server/lib/resend-signature.js → verify() de la firma Svix del webhook de Resend
+server/lib/email-scheduler.js→ setInterval: vence carros, manda recordatorios y follow-ups
+server/lib/carts.js          → Carritos capturados/abandonados (precios re-resueltos contra la DB)
 server/lib/users.js          → bcrypt + lookup + bootstrap del primer usuario
 server/lib/audit.js          → log de mutaciones (before/after JSON)
 server/lib/coupons.js        → validación y aplicación al carro
@@ -39,6 +47,8 @@ admin.html / admin.css / admin.js → Single-page admin (Alpine.js 3)
 assets/vendor/alpine.min.js  → Alpine self-hosted (44 KB) — NO usar CDN (CSP lo bloquea)
 scripts/seed-from-datajs.js  → Migración inicial data.js → SQLite (corre al boot si DB vacía)
 scripts/create-user.js       → CLI: crear/resetear usuario admin
+scripts/verify-emails.js     → `npm run verify:emails` — libs de email/carritos en DB temporal + dry-run
+scripts/verify-http.js       → `npm run verify:http` — levanta el server real y golpea las rutas nuevas
 Dockerfile                   → Node 20 alpine + VOLUME ["/data"]
 .env.example                 → Plantilla de credenciales
 PAGOS_Y_ENVIOS.md            → Guía MP + Chilexpress
@@ -67,6 +77,10 @@ En local default es `./data` (ver env `DATA_DIR`).
 | POST   | `/api/mercadopago/preference`              | Crea orden + Preference                    |
 | POST   | `/api/mercadopago/webhook`                 | Webhook con firma HMAC (descuenta stock al `approved`) |
 | GET    | `/api/orders/:id`                          | Detalle de orden (sin datos sensibles)     |
+| POST   | `/api/cart/capture`                        | Guarda carro + email del checkout (precios re-resueltos contra la DB) |
+| GET    | `/api/cart/:token`                         | Restaura el carro desde el link del email (`?rc=`) |
+| GET/POST | `/api/emails/unsubscribe`                | Baja con link firmado (GET = página, POST = one-click RFC 8058) |
+| POST   | `/api/emails/webhook`                      | Eventos de Resend con firma Svix (rebote duro ⇒ lista de exclusión) |
 | GET    | `/uploads/*`                               | Imágenes subidas desde admin (cache inmutable) |
 
 **Admin (`/api/admin/*`, requiere sesión salvo `/auth/*`):**
@@ -87,6 +101,14 @@ En local default es `./data` (ver env `DATA_DIR`).
 | POST   | `/api/admin/uploads/image`                 | Sube imagen → WebP en `/data/uploads/`     |
 | GET    | `/api/admin/dashboard`                     | KPIs + sparkline + top productos + actividad |
 | GET/PATCH | `/api/admin/settings/payment-fee`       | Comisión medio de pago `{ rate, enabled }` (editable/desactivable) |
+| GET    | `/api/admin/carts`                         | Carritos abandonados + resumen (KPIs)      |
+| GET/DELETE | `/api/admin/carts/:id`                 | Detalle con historial de emails / borrar (DELETE = admin) |
+| POST   | `/api/admin/carts/:id/remind`              | Reenvío manual del recordatorio (admin)    |
+| GET/PATCH | `/api/admin/emails/config`              | Config de emails + estado del proveedor (PATCH = admin) |
+| GET    | `/api/admin/emails/log`                    | Historial de envíos con filtros y paginación |
+| GET/POST/DELETE | `/api/admin/emails/suppressions`  | Lista de exclusión (escribir = admin)      |
+| POST   | `/api/admin/emails/test`                   | Email de prueba al admin logueado (admin)  |
+| POST   | `/api/admin/emails/run-scheduler`          | Fuerza un ciclo del scheduler (admin)      |
 
 ## Run locally
 
@@ -104,6 +126,15 @@ Primer boot:
 4. Si existe `server/data/orders.json` legacy, lo migra a SQLite y lo renombra a `.migrated.bak`.
 
 CLI útil: `node scripts/create-user.js <email> <password> [name] [role]` para crear/resetear admins.
+
+**Verificaciones** (no hay test runner ni CI a propósito — son scripts con `node` pelado):
+
+```bash
+npm run verify:emails   # libs de email/carritos: migración, templates+XSS, firmas, idempotencia, scheduler
+npm run verify:http     # levanta el server real en un puerto alto y golpea rutas, auth y webhook
+```
+
+Ambos usan un `DATA_DIR` temporal y fuerzan `RESEND_API_KEY=""` ⇒ **no tocan la DB real ni envían un solo correo**. Corrélos antes de pushear cualquier cambio del backend.
 
 ## Deploy
 

@@ -68,7 +68,7 @@
           <span class="ac-nav-icon" x-html="item.icon"></span>
           <span class="ac-nav-label" x-text="item.label"></span>
           <span class="ac-nav-badge" x-show="navBadge(item.id) > 0"
-                :title="item.id === 'orders' ? 'Órdenes pagadas sin despachar' : 'Variantes con stock crítico'"
+                :title="navBadgeTitle(item.id)"
                 x-text="navBadge(item.id)"></span>
         </button>
       </template>
@@ -528,6 +528,114 @@
         </div>
       </section>
 
+      <!-- CARRITOS ABANDONADOS
+           Todo con x-text: el nombre y el email los escribe el cliente en el
+           checkout público. Con x-html, un "<img src=x onerror=…>" ahí corre
+           con la sesión del admin (mismo criterio que el drawer de órdenes). -->
+      <section x-show="view === 'carts'">
+        <header class="ac-page-head">
+          <div>
+            <h1 class="ac-page-title">Carritos</h1>
+            <p class="ac-page-sub">
+              <span x-text="cartPage.total"></span> carritos<span x-show="cartFiltersActive"> con estos filtros</span> ·
+              mostrando <span x-text="carts.length"></span>
+            </p>
+          </div>
+          <div class="ac-page-actions">
+            <button class="ac-btn-ghost" @click="openEmailSettings()" x-show="isAdmin">✉ Configurar emails</button>
+            <button class="ac-btn-primary" @click="runEmailScheduler()" x-show="isAdmin"
+                    :disabled="emails.running" x-text="emails.running ? 'Procesando…' : '↻ Enviar pendientes'"></button>
+          </div>
+        </header>
+
+        <div class="ac-kpis" x-show="cartSummary">
+          <div class="ac-kpi ac-kpi-primary">
+            <div class="ac-kpi-label">Abiertos</div>
+            <div class="ac-kpi-value" x-text="(cartSummary?.active || 0) + (cartSummary?.recovered || 0)"></div>
+            <div class="ac-kpi-meta" x-text="fmtCLP(cartSummary?.open_value || 0) + ' en juego'"></div>
+          </div>
+          <div class="ac-kpi">
+            <div class="ac-kpi-label">Con email</div>
+            <div class="ac-kpi-value" x-text="cartSummary?.with_email || 0"></div>
+            <div class="ac-kpi-meta">Se les puede escribir</div>
+          </div>
+          <div class="ac-kpi">
+            <div class="ac-kpi-label">Recuperados</div>
+            <div class="ac-kpi-value" x-text="cartSummary?.converted || 0"></div>
+            <div class="ac-kpi-meta" x-text="(cartSummary?.recoveryRate || 0) + '% de los que dejaron email'"></div>
+          </div>
+          <div class="ac-kpi">
+            <div class="ac-kpi-label">Vencidos</div>
+            <div class="ac-kpi-value" x-text="cartSummary?.expired || 0"></div>
+            <div class="ac-kpi-meta" x-text="'Tras ' + (emails.config?.cartExpireDays || 14) + ' días'"></div>
+          </div>
+        </div>
+
+        <div class="ac-filters">
+          <input class="ac-filter-search" type="search" placeholder="Buscar por email, nombre, producto o token…"
+                 x-model="cartQuery.q" @input="searchCartsDebounced()" />
+          <select class="ac-select" x-model="cartQuery.status" @change="loadCarts()">
+            <option value="">Estado: todos</option>
+            <template x-for="s in CART_STATES" :key="s.id">
+              <option :value="s.id" x-text="'Estado: ' + s.label"></option>
+            </template>
+          </select>
+          <select class="ac-select" x-model="cartQuery.has_email" @change="loadCarts()">
+            <option value="">Email: todos</option>
+            <option value="1">Email: capturado</option>
+            <option value="0">Email: sin capturar</option>
+          </select>
+          <input class="ac-select ac-filter-date" type="date" x-model="cartQuery.from" @change="loadCarts()" title="Desde" />
+          <input class="ac-select ac-filter-date" type="date" x-model="cartQuery.to" @change="loadCarts()" title="Hasta" />
+          <button class="ac-btn-ghost ac-btn-sm" @click="resetCartFilters()" x-show="cartFiltersActive">Limpiar</button>
+        </div>
+
+        <div class="ac-table ac-carts" :class="{ loading: loadingCarts }">
+          <div class="ac-table-head">
+            <div class="ac-th ac-cc-cli">Cliente</div>
+            <div class="ac-th ac-cc-items">Carro</div>
+            <div class="ac-th ac-cc-total">Valor</div>
+            <div class="ac-th ac-cc-state">Estado</div>
+            <div class="ac-th ac-cc-rem">Recordatorios</div>
+            <div class="ac-th ac-cc-date">Creado</div>
+          </div>
+          <template x-for="c in carts" :key="c.id">
+            <div class="ac-tr ac-tr-order" @click="openCartDetail(c.id)">
+              <div class="ac-td ac-cc-cli">
+                <div class="ac-ord-name" x-text="c.name || c.email || 'Sin datos'"></div>
+                <div class="ac-ord-sub" x-text="c.name ? (c.email || '') : ''"></div>
+              </div>
+              <div class="ac-td ac-cc-items">
+                <div x-text="cartItemsLabel(c)"></div>
+                <div class="ac-ord-sub" x-text="c.itemCount + (c.itemCount === 1 ? ' unidad' : ' unidades')"></div>
+              </div>
+              <div class="ac-td ac-cc-total ac-mono ac-ord-total" x-text="fmtCLP(c.subtotal)"></div>
+              <div class="ac-td ac-cc-state">
+                <span class="ac-state-pill" :class="'cart-' + c.status" x-text="cartStateLabel(c.status)"></span>
+                <div class="ac-ord-sub ac-mono" x-show="c.orderId" x-text="c.orderId"></div>
+              </div>
+              <div class="ac-td ac-cc-rem">
+                <span class="ac-rem-dots">
+                  <span class="ac-rem-dot" :class="{ on: c.reminder1hSentAt }" title="1er recordatorio"></span>
+                  <span class="ac-rem-dot" :class="{ on: c.reminder24hSentAt }" title="2do recordatorio"></span>
+                </span>
+                <div class="ac-ord-sub" x-show="!c.email">Sin email</div>
+              </div>
+              <div class="ac-td ac-cc-date">
+                <div x-text="timeAgo(c.created_at || c.createdAt)"></div>
+                <div class="ac-ord-sub" x-text="fmtDateTime(c.createdAt)"></div>
+              </div>
+            </div>
+          </template>
+          <p class="ac-empty" x-show="!loadingCarts && carts.length === 0">No hay carritos con este filtro.</p>
+        </div>
+
+        <div class="ac-pager" x-show="cartPage.hasMore">
+          <button class="ac-btn-ghost" @click="loadMoreCarts()" :disabled="loadingCarts"
+                  x-text="loadingCarts ? 'Cargando…' : 'Cargar más (' + (cartPage.total - carts.length) + ' restantes)'"></button>
+        </div>
+      </section>
+
       <!-- AUDIT LOG / USUARIOS -->
       <section x-show="view === 'settings'">
         <header class="ac-page-head">
@@ -538,6 +646,7 @@
 
         <div class="ac-tabs">
           <button class="ac-tab" :class="{ active: settingsTab === 'users' }" @click="settingsTab = 'users'">Usuarios</button>
+          <button class="ac-tab" :class="{ active: settingsTab === 'emails' }" @click="settingsTab = 'emails'; loadEmails()">Emails</button>
           <button class="ac-tab" :class="{ active: settingsTab === 'audit' }" @click="settingsTab = 'audit'; loadAudit()">Audit log</button>
           <button class="ac-tab" :class="{ active: settingsTab === 'info' }" @click="settingsTab = 'info'">Sistema</button>
         </div>
@@ -558,6 +667,263 @@
                 <button class="ac-icon-btn" @click="openUserEditor('edit', u)">✎</button>
               </div>
             </template>
+          </div>
+        </div>
+
+        <!-- ===================== EMAILS ===================== -->
+        <div x-show="settingsTab === 'emails'">
+          <div class="ac-tabs ac-subtabs">
+            <button class="ac-tab" :class="{ active: emailTab === 'config' }" @click="setEmailTab('config')">Configuración</button>
+            <button class="ac-tab" :class="{ active: emailTab === 'log' }" @click="setEmailTab('log')">Historial</button>
+            <button class="ac-tab" :class="{ active: emailTab === 'suppressions' }" @click="setEmailTab('suppressions')">Exclusiones</button>
+          </div>
+
+          <!-- Estado del proveedor -->
+          <div class="ac-setting-card" x-show="emails.provider">
+            <h3 class="ac-an-card-title">Proveedor</h3>
+            <div class="ac-email-status">
+              <span class="ac-state-pill" :class="emails.provider?.configured ? 'state-approved' : 'state-pending'"
+                    x-text="emails.provider?.configured ? 'Resend conectado' : 'Modo dry-run'"></span>
+              <span class="ac-state-pill" :class="emails.provider?.webhookSecretConfigured ? 'state-approved' : 'state-pending'"
+                    x-text="emails.provider?.webhookSecretConfigured ? 'Webhook firmado' : 'Webhook sin firma'"></span>
+              <span class="ac-role-pill" x-show="emails.scheduler"
+                    x-text="'Ciclo cada ' + (emails.scheduler?.intervalMinutes || 10) + ' min'"></span>
+            </div>
+            <p class="ac-edit-hint" x-show="!emails.provider?.configured">
+              Sin <code>RESEND_API_KEY</code> los emails se renderizan y quedan en el historial como
+              <strong>dry-run</strong>, pero no se envían. Es el modo seguro para probar.
+            </p>
+            <p class="ac-edit-hint" x-show="emails.provider?.configured && !emails.provider?.webhookSecretConfigured">
+              Falta <code>RESEND_WEBHOOK_SECRET</code>: sin él cualquiera podría reportar rebotes falsos
+              y meter clientes en la lista de exclusión.
+            </p>
+            <div class="ac-email-stats" x-show="emails.stats">
+              <span x-text="'Últimos 7 días: ' + (emails.stats?.last7 || 0)"></span>
+              <span x-text="'Fallidos: ' + (emails.stats?.failed7 || 0)"></span>
+              <span x-text="'Excluidos: ' + (emails.stats?.suppressions || 0)"></span>
+            </div>
+          </div>
+
+          <div x-show="emailTab === 'config'">
+            <!-- x-if y no x-show: x-show deja los hijos en el árbol y Alpine
+                 evalúa igual sus expresiones. Con `emails.config` todavía en
+                 null (antes de que responda /emails/config) cada x-model de acá
+                 abajo tiraría "Cannot read properties of null" en consola. -->
+            <template x-if="emails.config">
+            <div class="ac-setting-card">
+              <h3 class="ac-an-card-title">Remitente y respuestas</h3>
+              <label class="ac-edit-checkbox" style="margin-bottom:14px">
+                <input type="checkbox" x-model="emails.config.enabled" />
+                <span x-text="emails.config?.enabled ? 'Emails activados' : 'Emails desactivados (no sale nada)'"></span>
+              </label>
+              <div class="ac-edit-grid">
+                <div class="ac-edit-field">
+                  <span>Remitente (from)</span>
+                  <input type="text" x-model="emails.config.from" placeholder="iPhone UP &lt;hola@tudominio.cl&gt;" />
+                </div>
+                <div class="ac-edit-field">
+                  <span>Reply-To <em x-show="emails.pending?.replyTo">— sin definir</em></span>
+                  <input type="email" x-model="emails.config.replyTo" placeholder="vacío = responder al remitente" />
+                </div>
+                <div class="ac-edit-field">
+                  <span>Aviso interno de ventas <em x-show="emails.pending?.internalTo">— desactivado</em></span>
+                  <input type="email" x-model="emails.config.internalTo" placeholder="vacío = no enviar avisos internos" />
+                </div>
+              </div>
+              <p class="ac-edit-hint">
+                El dominio del remitente tiene que estar verificado en Resend. Reply-To y aviso interno
+                pueden quedar vacíos: vacío significa "omitir", no se usa ningún placeholder.
+              </p>
+              <div class="ac-setting-actions">
+                <button class="ac-btn-primary" @click="saveEmails()" :disabled="emails.saving"
+                        x-text="emails.saving ? 'Guardando…' : 'Guardar configuración'"></button>
+              </div>
+            </div>
+            </template>
+
+            <template x-if="emails.config">
+            <div class="ac-setting-card">
+              <h3 class="ac-an-card-title">Carritos abandonados</h3>
+              <label class="ac-edit-checkbox">
+                <input type="checkbox" x-model="emails.config.captureEnabled" />
+                <span>Pedir el email en el checkout (con la leyenda visible)</span>
+              </label>
+              <label class="ac-edit-checkbox">
+                <input type="checkbox" x-model="emails.config.cartRemindersEnabled" />
+                <span>Enviar recordatorios de carrito</span>
+              </label>
+              <div class="ac-edit-grid" :style="emails.config.cartRemindersEnabled ? '' : 'opacity:.5'">
+                <div class="ac-edit-field">
+                  <span>1er recordatorio (horas)</span>
+                  <input type="number" step="0.5" min="0.25" max="240" x-model.number="emails.config.cartReminder1hHours"
+                         :disabled="!emails.config.cartReminder1hEnabled" />
+                  <label class="ac-edit-checkbox">
+                    <input type="checkbox" x-model="emails.config.cartReminder1hEnabled" /><span>Activo</span>
+                  </label>
+                </div>
+                <div class="ac-edit-field">
+                  <span>2do recordatorio (horas)</span>
+                  <input type="number" step="1" min="0.5" max="720" x-model.number="emails.config.cartReminder24hHours"
+                         :disabled="!emails.config.cartReminder24hEnabled" />
+                  <label class="ac-edit-checkbox">
+                    <input type="checkbox" x-model="emails.config.cartReminder24hEnabled" /><span>Activo</span>
+                  </label>
+                </div>
+                <div class="ac-edit-field">
+                  <span>El carrito vence en (días)</span>
+                  <input type="number" step="1" min="1" max="180" x-model.number="emails.config.cartExpireDays" />
+                </div>
+                <div class="ac-edit-field">
+                  <span>Cupón a ofrecer (opcional)</span>
+                  <input type="text" x-model="emails.config.cartCouponCode" placeholder="vacío = sin descuento" />
+                </div>
+              </div>
+              <p class="ac-edit-hint">
+                Por default los recordatorios <strong>no</strong> ofrecen descuento. Si pones un código, se
+                valida antes de prometerlo: uno vencido o agotado no se menciona en el email.
+              </p>
+              <div class="ac-setting-actions">
+                <button class="ac-btn-primary" @click="saveEmails()" :disabled="emails.saving"
+                        x-text="emails.saving ? 'Guardando…' : 'Guardar configuración'"></button>
+              </div>
+            </div>
+            </template>
+
+            <template x-if="emails.config">
+            <div class="ac-setting-card">
+              <h3 class="ac-an-card-title">Seguimiento post entrega</h3>
+              <label class="ac-edit-checkbox">
+                <input type="checkbox" x-model="emails.config.followupEnabled" />
+                <span>Escribir después de entregar el pedido</span>
+              </label>
+              <div class="ac-edit-field" style="max-width:220px" :style="emails.config.followupEnabled ? '' : 'opacity:.5'">
+                <span>Días después de la entrega</span>
+                <input type="number" step="1" min="1" max="180" x-model.number="emails.config.followupDays"
+                       :disabled="!emails.config.followupEnabled" />
+              </div>
+              <p class="ac-edit-hint">
+                Se cuenta desde que la orden pasa a <strong>Entregado</strong>, no desde la compra. Lleva link
+                de baja: es el único correo que no es estrictamente parte de la venta.
+              </p>
+              <div class="ac-setting-actions">
+                <button class="ac-btn-primary" @click="saveEmails()" :disabled="emails.saving"
+                        x-text="emails.saving ? 'Guardando…' : 'Guardar configuración'"></button>
+              </div>
+            </div>
+            </template>
+
+            <div class="ac-setting-card">
+              <h3 class="ac-an-card-title">Probar</h3>
+              <div class="ac-edit-grid">
+                <div class="ac-edit-field">
+                  <span>Enviar prueba a</span>
+                  <input type="email" x-model="emails.testTo" :placeholder="session?.email || 'tu correo'" />
+                </div>
+              </div>
+              <p class="ac-edit-hint">Vacío = tu propia cuenta. En dry-run no sale nada de la máquina; queda en el historial.</p>
+              <div class="ac-setting-actions">
+                <button class="ac-btn-primary" @click="sendTestEmail()" :disabled="emails.testing"
+                        x-text="emails.testing ? 'Enviando…' : 'Enviar prueba'"></button>
+                <button class="ac-btn-ghost" @click="runEmailScheduler()" :disabled="emails.running"
+                        x-text="emails.running ? 'Procesando…' : 'Correr el ciclo ahora'"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historial de envíos -->
+          <div x-show="emailTab === 'log'">
+            <div class="ac-filters">
+              <input class="ac-filter-search" type="search" placeholder="Buscar por destinatario…"
+                     x-model="emailLogQuery.to_email" @input="searchEmailLogDebounced()" />
+              <select class="ac-select" x-model="emailLogQuery.status" @change="loadEmailLog()">
+                <option value="">Estado: todos</option>
+                <template x-for="s in EMAIL_STATES" :key="s.id">
+                  <option :value="s.id" x-text="'Estado: ' + s.label"></option>
+                </template>
+              </select>
+              <button class="ac-btn-ghost ac-btn-sm" @click="loadEmailLog()">Refrescar</button>
+            </div>
+            <div class="ac-table ac-emails" :class="{ loading: loadingEmailLog }">
+              <div class="ac-table-head">
+                <div class="ac-th">Asunto</div>
+                <div class="ac-th">Destinatario</div>
+                <div class="ac-th">Estado</div>
+                <div class="ac-th">Eventos</div>
+                <div class="ac-th">Fecha</div>
+              </div>
+              <template x-for="e in emailLog" :key="e.id">
+                <div class="ac-tr">
+                  <div class="ac-td">
+                    <div x-text="e.subject || e.template"></div>
+                    <div class="ac-ord-sub ac-mono" x-text="e.template + (e.order_id ? ' · ' + e.order_id : '')"></div>
+                  </div>
+                  <div class="ac-td" x-text="e.to_email"></div>
+                  <div class="ac-td">
+                    <span class="ac-state-pill" :class="emailStateClass(e.status)" x-text="emailStateLabel(e.status)"></span>
+                    <div class="ac-ord-sub" x-show="e.error" x-text="e.error"></div>
+                  </div>
+                  <div class="ac-td ac-email-events">
+                    <span x-show="e.delivered_at" title="Entregado">📬</span>
+                    <span x-show="e.opened_at" title="Abierto">👁</span>
+                    <span x-show="e.clicked_at" title="Con clic">🔗</span>
+                    <span x-show="e.bounced_at" title="Rebotó">⚠️</span>
+                    <span x-show="e.complained_at" title="Marcado como spam">🚫</span>
+                  </div>
+                  <div class="ac-td">
+                    <div x-text="timeAgo(e.created_at)"></div>
+                    <div class="ac-ord-sub" x-text="fmtDateTime(e.created_at)"></div>
+                  </div>
+                </div>
+              </template>
+              <p class="ac-empty" x-show="!loadingEmailLog && emailLog.length === 0">Todavía no se envió ningún email.</p>
+            </div>
+            <div class="ac-pager" x-show="emailLogPage.hasMore">
+              <button class="ac-btn-ghost" @click="loadMoreEmailLog()" :disabled="loadingEmailLog"
+                      x-text="loadingEmailLog ? 'Cargando…' : 'Cargar más (' + (emailLogPage.total - emailLog.length) + ' restantes)'"></button>
+            </div>
+          </div>
+
+          <!-- Lista de exclusión -->
+          <div x-show="emailTab === 'suppressions'">
+            <div class="ac-setting-card">
+              <h3 class="ac-an-card-title">Agregar a la lista de exclusión</h3>
+              <p class="ac-page-sub" style="margin:0 0 12px">
+                Un rebote o una marca de spam bloquean <strong>todo</strong>. Una baja voluntaria o manual
+                bloquea solo lo no transaccional: la confirmación de un pago que la persona acaba de hacer
+                se envía igual.
+              </p>
+              <div class="ac-edit-grid">
+                <div class="ac-edit-field">
+                  <span>Email</span>
+                  <input type="email" x-model="suppressionForm.email" placeholder="cliente@ejemplo.cl" />
+                </div>
+                <div class="ac-edit-field">
+                  <span>Motivo</span>
+                  <select class="ac-select" x-model="suppressionForm.reason">
+                    <template x-for="r in SUPPRESSION_REASONS" :key="r.id">
+                      <option :value="r.id" x-text="r.label"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+              <div class="ac-setting-actions">
+                <button class="ac-btn-primary" @click="addSuppression()" :disabled="suppressionForm.saving"
+                        x-text="suppressionForm.saving ? 'Guardando…' : 'Agregar'"></button>
+              </div>
+            </div>
+            <div class="ac-users-list">
+              <template x-for="s in suppressions" :key="s.email">
+                <div class="ac-user-row ac-supp-row">
+                  <div class="ac-user-info">
+                    <strong x-text="s.email"></strong>
+                    <span x-text="(s.source ? s.source + ' · ' : '') + fmtDateTime(s.created_at)"></span>
+                  </div>
+                  <span class="ac-role-pill" x-text="suppressionReasonLabel(s.reason)"></span>
+                  <button class="ac-icon-btn" @click="removeSuppression(s.email)" title="Volver a permitir">✕</button>
+                </div>
+              </template>
+              <p class="ac-empty" x-show="suppressions.length === 0">Nadie en la lista de exclusión.</p>
+            </div>
           </div>
         </div>
 
@@ -617,6 +983,86 @@
 
     </main>
   </div>
+
+  <!-- ========== DRAWER DE CARRITO ==========
+       Mismo criterio que el drawer de órdenes: x-text en todo. El nombre y el
+       email los tipea el cliente en el checkout público. -->
+  <div class="ac-drawer-overlay" x-show="cartDrawer.open" @click="closeCartDrawer()" x-cloak></div>
+  <aside class="ac-drawer ac-drawer-order" :class="{ open: cartDrawer.open }">
+    <header class="ac-drawer-head">
+      <h2 x-text="cartDrawer.cart ? (cartDrawer.cart.name || cartDrawer.cart.email || 'Carrito') : 'Carrito'"></h2>
+      <button class="ac-icon-btn" @click="closeCartDrawer()">✕</button>
+    </header>
+
+    <p class="ac-empty" x-show="cartDrawer.loading">Cargando carrito…</p>
+
+    <template x-if="cartDrawer.cart && !cartDrawer.loading">
+      <div class="ac-drawer-body">
+        <div class="ac-order-pills">
+          <span class="ac-state-pill" :class="'cart-' + cartDrawer.cart.status" x-text="cartStateLabel(cartDrawer.cart.status)"></span>
+          <span class="ac-role-pill" x-show="cartDrawer.cart.source" x-text="cartDrawer.cart.source"></span>
+          <span class="ac-role-pill" x-show="!cartDrawer.cart.consent">Sin consentimiento</span>
+        </div>
+        <p class="ac-order-date" x-text="'Creado ' + fmtDateTime(cartDrawer.cart.createdAt)"></p>
+
+        <h3 class="ac-order-sec">Cliente</h3>
+        <div class="ac-order-kv">
+          <span>Nombre</span><strong x-text="cartDrawer.cart.name || '—'"></strong>
+          <span>Email</span><strong x-text="cartDrawer.cart.email || 'No capturado'"></strong>
+          <span x-show="cartDrawer.cart.phone">Teléfono</span><strong x-show="cartDrawer.cart.phone" x-text="cartDrawer.cart.phone"></strong>
+          <span x-show="cartDrawer.cart.orderId">Terminó en</span><strong class="ac-mono" x-show="cartDrawer.cart.orderId" x-text="cartDrawer.cart.orderId"></strong>
+        </div>
+
+        <h3 class="ac-order-sec">Carro</h3>
+        <div class="ac-order-items">
+          <template x-for="(it, i) in cartDrawer.cart.items" :key="i">
+            <div class="ac-order-item">
+              <div>
+                <strong x-text="it.model"></strong>
+                <div class="ac-ord-sub"
+                     x-text="[it.storage, it.color, it.sealed ? 'Sellado' : 'Seminuevo', it.available === false ? 'sin stock' : ''].filter(Boolean).join(' · ')"></div>
+              </div>
+              <span class="ac-mono" x-text="fmtCLP(it.price * (it.qty || 1))"></span>
+            </div>
+          </template>
+        </div>
+        <div class="ac-order-kv">
+          <span>Subtotal</span><strong class="ac-mono" x-text="fmtCLP(cartDrawer.cart.subtotal)"></strong>
+          <span>Vence</span><strong x-text="fmtDateTime(cartDrawer.cart.expiresAt)"></strong>
+        </div>
+
+        <h3 class="ac-order-sec">Recordatorios</h3>
+        <div class="ac-order-kv">
+          <span>1er aviso</span><strong x-text="cartDrawer.cart.reminder1hSentAt ? fmtDateTime(cartDrawer.cart.reminder1hSentAt) : 'Sin enviar'"></strong>
+          <span>2do aviso</span><strong x-text="cartDrawer.cart.reminder24hSentAt ? fmtDateTime(cartDrawer.cart.reminder24hSentAt) : 'Sin enviar'"></strong>
+          <span x-show="cartDrawer.cart.recoveredAt">Volvió por el link</span>
+          <strong x-show="cartDrawer.cart.recoveredAt" x-text="fmtDateTime(cartDrawer.cart.recoveredAt)"></strong>
+        </div>
+
+        <div class="ac-email-mini" x-show="cartDrawer.cart.emails?.length">
+          <template x-for="e in cartDrawer.cart.emails" :key="e.id">
+            <div class="ac-email-mini-row">
+              <span class="ac-state-pill" :class="emailStateClass(e.status)" x-text="emailStateLabel(e.status)"></span>
+              <span x-text="e.subject || e.template"></span>
+              <span class="ac-ord-sub" x-text="timeAgo(e.created_at)"></span>
+            </div>
+          </template>
+        </div>
+
+        <div class="ac-order-cta" x-show="isAdmin">
+          <button class="ac-btn-primary" @click="remindCart('1h')"
+                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email"
+                  x-text="cartDrawer.reminding ? 'Enviando…' : 'Enviar 1er recordatorio'"></button>
+          <button class="ac-btn-ghost" @click="remindCart('24h')"
+                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email">Enviar 2do recordatorio</button>
+          <button class="ac-btn-danger" @click="deleteCart(cartDrawer.cart.id)">Borrar carrito</button>
+        </div>
+        <p class="ac-edit-hint" x-show="!cartDrawer.cart.email">
+          Sin email capturado no hay a quién escribirle. El carrito queda solo como dato de analítica.
+        </p>
+      </div>
+    </template>
+  </aside>
 
   <!-- ========== DRAWER DE ORDEN ==========
        Todo se pinta con x-text / :attr y NUNCA con x-html: el nombre, la

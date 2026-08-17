@@ -18,6 +18,10 @@ const fmt = window.fmtCLP || (n => "$" + Number(n).toLocaleString("es-CL"));
 const PAY_FEE = window.PAY_FEE || { rate: 0.035, enabled: true };
 const fmtPct = (r) => (r * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 }) + "%";
 
+// Captura del carro para recordatorios — se apaga desde el admin.
+const CART_CAPTURE = window.CART_CAPTURE || { enabled: false, expireDays: 14 };
+const CART_TOKEN_KEY = "iphoneup_cart_token";
+
 const state = {
   items: [],
   regions: [],
@@ -28,6 +32,7 @@ const state = {
   selectedShip: null,
   deliveryMethod: "shipping", // "shipping" (despacho) | "pickup" (retiro en tienda)
   submitting: false,
+  cartToken: null,
 };
 
 let regionDD = null;
@@ -217,6 +222,103 @@ async function apiPost(url, body) {
   return r.json();
 }
 
+// ---------- Captura del carro (recordatorios de carro abandonado) ----------
+// Se dispara al escribir el email, con debounce: sin esto habría un POST por
+// tecla. Es best-effort puro — si falla, el checkout sigue funcionando igual.
+let captureTimer = null;
+
+function readCartToken() {
+  try { return sessionStorage.getItem(CART_TOKEN_KEY) || null; } catch { return null; }
+}
+function writeCartToken(token) {
+  state.cartToken = token;
+  try { sessionStorage.setItem(CART_TOKEN_KEY, token); } catch {}
+}
+
+async function captureCart() {
+  if (!CART_CAPTURE.enabled || !state.items.length) return;
+  const form = $("#checkout-form");
+  if (!form) return;
+  const email = form.email.value.trim();
+  // Sin un email con forma de email no hay a quién escribirle.
+  if (!/\S+@\S+\.\S+/.test(email)) return;
+
+  try {
+    const body = {
+      token: state.cartToken || undefined,
+      email,
+      name: form.name.value.trim() || undefined,
+      phone: form.phone.value.trim() || undefined,
+      items: state.items,
+      source: "checkout",
+    };
+    const r = await fetch("/api/cart/capture", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.token) writeCartToken(data.token);
+  } catch {
+    // Silencioso a propósito: es telemetría de recuperación, no parte del pago.
+  }
+}
+
+function scheduleCapture() {
+  clearTimeout(captureTimer);
+  captureTimer = setTimeout(captureCart, 1200);
+}
+
+// Restaura el carro desde el link de un email (?rc=<token>). Devuelve true si
+// pudo reponer items, para que init() no muestre la pantalla de "carro vacío".
+async function restoreCartFromLink() {
+  const token = new URLSearchParams(location.search).get("rc");
+  if (!token || !/^[a-f0-9]{32}$/.test(token)) return false;
+
+  const banner = $("#co-restored");
+  try {
+    const r = await fetch(`/api/cart/${encodeURIComponent(token)}`);
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      if (banner) {
+        banner.style.display = "";
+        banner.textContent = data.expired
+          ? "Ese carro venció, pero el catálogo sigue acá. Armá el tuyo de nuevo y te ayudamos con cualquier duda."
+          : data.converted
+            ? "Ese carro ya terminó en una compra. Si necesitás algo más, escribinos."
+            : "No pudimos recuperar ese carro. Armalo de nuevo y seguimos.";
+      }
+      return false;
+    }
+
+    if (Array.isArray(data.items) && data.items.length) {
+      // Reescribimos el carro con lo que devolvió el server: los precios de ahí
+      // salen de la DB, no del sessionStorage viejo del cliente.
+      window.cartStore.write(data.items);
+      state.items = data.items;
+      writeCartToken(token);
+      if (banner) {
+        banner.style.display = "";
+        banner.textContent = "Recuperamos tu carro. Revisá los precios y terminá cuando quieras.";
+      }
+      // Prellenamos lo que ya nos había dado.
+      requestAnimationFrame(() => {
+        const form = $("#checkout-form");
+        if (!form) return;
+        if (data.email && !form.email.value) form.email.value = data.email;
+        if (data.name && !form.name.value) form.name.value = data.name;
+        updateSubmitEnabled();
+      });
+      return true;
+    }
+  } catch {
+    // Sin conexión / respuesta rara: seguimos con el carro local.
+  }
+  return false;
+}
+
 // ---------- Carga de regiones / comunas ----------
 async function loadRegions() {
   regionDD.setMessage("Cargando…");
@@ -325,11 +427,14 @@ async function onSubmit(e) {
       items: state.items,
       shipping,
       buyer,
+      // Cierra el carro capturado: deja de estar en la cola de recordatorios.
+      cartToken: state.cartToken || undefined,
     });
     // Guardar el orderId para que la página de retorno pueda consultarlo.
     sessionStorage.setItem("iphoneup_last_order", orderId);
     // Limpiar carro — el pago se está procesando.
     window.cartStore.write([]);
+    try { sessionStorage.removeItem(CART_TOKEN_KEY); } catch {}
     const url = initPoint || sandboxInitPoint;
     if (!url) throw new Error("Mercado Pago no devolvió URL de pago");
     window.location.href = url;
@@ -363,8 +468,20 @@ function formatPhone(v) {
 }
 
 // ---------- Init ----------
-function init() {
+async function init() {
   state.items = getItems();
+  state.cartToken = readCartToken();
+
+  // El link del email puede reponer un carro vacío, así que esto va ANTES del
+  // chequeo de "carro vacío".
+  await restoreCartFromLink();
+  if (!state.items.length) state.items = getItems();
+
+  if (CART_CAPTURE.enabled === false) {
+    const d = $("#co-email-disclosure");
+    if (d) d.style.display = "none";
+  }
+
   if (state.items.length === 0) {
     $("#checkout-grid").style.display = "none";
     $("#checkout-empty").style.display = "block";
@@ -418,6 +535,11 @@ function init() {
   // Auto-formato de RUT y teléfono mientras se escribe.
   form.rut.addEventListener("input", () => { form.rut.value = formatRut(form.rut.value); });
   form.phone.addEventListener("input", () => { form.phone.value = formatPhone(form.phone.value); });
+
+  // Captura del carro: al terminar de escribir el email y al salir del campo.
+  form.email.addEventListener("input", scheduleCapture);
+  form.email.addEventListener("blur", captureCart);
+  form.name.addEventListener("blur", captureCart);
 
   $("#co-method-shipping").addEventListener("click", () => setDeliveryMethod("shipping"));
   $("#co-method-pickup").addEventListener("click", () => setDeliveryMethod("pickup"));

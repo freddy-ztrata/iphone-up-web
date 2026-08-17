@@ -52,6 +52,9 @@
       <a href="/catalogo" class="btn-primary">Ver catálogo →</a>
     </div>
 
+    <!-- Aviso al volver desde el link de un email de carro abandonado (?rc=token). -->
+    <div id="co-restored" class="co-restored" role="status" style="display:none"></div>
+
     <div id="checkout-grid" class="checkout-grid">
 
       <!-- ============== FORM ============== -->
@@ -79,6 +82,13 @@
               <input type="tel" name="phone" required autocomplete="tel" placeholder="+56 9 ..." />
             </label>
           </div>
+          <!-- Disclosure de la captura de email. Se oculta desde el admin
+               (Ajustes → Emails) vía window.CART_CAPTURE.enabled. -->
+          <p class="co-disclosure" id="co-email-disclosure">
+            Guardamos tu correo y tu carro para enviarte la confirmación de la compra y, si no
+            terminás ahora, un recordatorio con el link para retomarla. Nada de publicidad: podés
+            darte de baja de los recordatorios con un clic desde cualquiera de esos correos.
+          </p>
           <label class="co-field">
             <span>Instagram</span>
             <input type="text" name="instagram" placeholder="@tucuenta" autocomplete="off" />

@@ -14,6 +14,8 @@ const uploadsRouter = require("./uploads");
 const dashboardRouter = require("./dashboard");
 const analyticsRouter = require("./analytics");
 const settingsRouter = require("./settings");
+const cartsRouter = require("./carts");
+const emailsRouter = require("./emails");
 
 const router = express.Router();
 
@@ -31,5 +33,7 @@ router.use("/uploads", uploadsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/settings", settingsRouter);
+router.use("/carts", cartsRouter);
+router.use("/emails", emailsRouter);
 
 module.exports = router;

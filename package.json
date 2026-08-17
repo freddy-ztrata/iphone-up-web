@@ -8,7 +8,9 @@
     "start": "node server/index.js",
     "dev": "node server/index.js",
     "create-user": "node scripts/create-user.js",
-    "seed": "node scripts/seed-from-datajs.js"
+    "seed": "node scripts/seed-from-datajs.js",
+    "verify:emails": "node scripts/verify-emails.js",
+    "verify:http": "node scripts/verify-http.js"
   },
   "engines": {
     "node": ">=20"

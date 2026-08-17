@@ -95,8 +95,140 @@ function resetTradeinPrices() {
   return getTradeinPrices();
 }
 
+// ----- Emails + carritos abandonados -----
+// Cascada de resolución para CADA campo: valor guardado en `settings` → env →
+// default de fábrica. La env existe para poder configurar el remitente en el
+// deploy sin entrar al panel; el panel gana si el cliente lo tocó alguna vez.
+//
+// Los tres campos que Freddy todavía no definió (reply-to, correo interno,
+// cupón de recuperación) tienen default "" a propósito: vacío significa
+// "omitir esa parte", NO "usar un placeholder". Un reply-to inventado rebota y
+// un correo interno inventado le manda las ventas a un tercero.
+const EMAIL_DEFAULTS = {
+  // Interruptor general. En false NADA sale (ni transaccional): el mailer
+  // registra el intento como `disabled` y sigue.
+  enabled: true,
+  // Remitente. `onboarding@resend.dev` es el sandbox documentado de Resend:
+  // solo entrega al dueño de la cuenta, así que es imposible spamear a un
+  // tercero con la config de fábrica. Reemplazar por el dominio verificado.
+  from: "iPhone UP <onboarding@resend.dev>",
+  // "" ⇒ no se manda la cabecera Reply-To (las respuestas van al `from`).
+  replyTo: "",
+  // "" ⇒ los avisos internos de venta nueva quedan desactivados.
+  internalTo: "",
+  cartRemindersEnabled: true,
+  cartReminder1hEnabled: true,
+  cartReminder24hEnabled: true,
+  cartReminder1hHours: 1,
+  cartReminder24hHours: 24,
+  cartExpireDays: 14,
+  // "" ⇒ los recordatorios NO ofrecen descuento (default aprobado).
+  cartCouponCode: "",
+  followupEnabled: true,
+  followupDays: 7,
+  // Captura del email en el checkout (con su leyenda visible).
+  captureEnabled: true,
+};
+
+const EMAIL_KEYS = {
+  enabled:               { key: "emails_enabled",                type: "bool",   env: "EMAILS_ENABLED" },
+  from:                  { key: "emails_from",                   type: "string", env: "EMAIL_FROM" },
+  replyTo:               { key: "emails_reply_to",               type: "string", env: "EMAIL_REPLY_TO" },
+  internalTo:            { key: "emails_internal_to",            type: "string", env: "EMAIL_INTERNAL_TO" },
+  cartRemindersEnabled:  { key: "cart_reminders_enabled",        type: "bool" },
+  cartReminder1hEnabled: { key: "cart_reminder_1h_enabled",      type: "bool" },
+  cartReminder24hEnabled:{ key: "cart_reminder_24h_enabled",     type: "bool" },
+  cartReminder1hHours:   { key: "cart_reminder_1h_hours",        type: "number", min: 0.25, max: 240 },
+  cartReminder24hHours:  { key: "cart_reminder_24h_hours",       type: "number", min: 0.5,  max: 720 },
+  cartExpireDays:        { key: "cart_expire_days",              type: "number", min: 1,    max: 180 },
+  cartCouponCode:        { key: "cart_coupon_code",              type: "string" },
+  followupEnabled:       { key: "email_followup_enabled",        type: "bool" },
+  followupDays:          { key: "email_followup_days",           type: "number", min: 1,    max: 180 },
+  captureEnabled:        { key: "email_capture_enabled",         type: "bool" },
+};
+
+function parseBool(raw, fallback) {
+  if (raw == null || raw === "") return fallback;
+  const s = String(raw).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(s)) return true;
+  if (["false", "0", "no", "off"].includes(s)) return false;
+  return fallback;
+}
+
+function parseNumber(raw, fallback, { min, max } = {}) {
+  if (raw == null || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  if (min != null && n < min) return min;
+  if (max != null && n > max) return max;
+  return n;
+}
+
+function getEmailConfig() {
+  const out = {};
+  for (const [field, spec] of Object.entries(EMAIL_KEYS)) {
+    const fallback = spec.env ? (process.env[spec.env] ?? EMAIL_DEFAULTS[field]) : EMAIL_DEFAULTS[field];
+    const raw = getRaw(spec.key);
+    if (spec.type === "bool") out[field] = parseBool(raw, parseBool(fallback, EMAIL_DEFAULTS[field]));
+    else if (spec.type === "number") out[field] = parseNumber(raw, parseNumber(fallback, EMAIL_DEFAULTS[field], spec), spec);
+    else out[field] = String(raw ?? fallback ?? "").trim();
+  }
+  return out;
+}
+
+// Un email "suelto" (sin display name) para validar destinatarios internos y
+// reply-to. Deliberadamente laxo: no queremos rechazar direcciones válidas
+// raras, solo atajar los errores de tipeo obvios y cualquier CR/LF (inyección
+// de cabeceras si terminara pegado en un header SMTP).
+const EMAIL_RE = /^[^\s@<>",;:]+@[^\s@<>",;:]+\.[^\s@<>",;:]{2,}$/;
+
+function isEmail(value) {
+  const s = String(value || "").trim();
+  return s.length <= 254 && EMAIL_RE.test(s);
+}
+
+// `from` puede venir como "Nombre <mail@dominio>" o solo "mail@dominio".
+function isFromAddress(value) {
+  const s = String(value || "").trim();
+  if (/[\r\n]/.test(s)) return false;
+  const m = s.match(/^(.*)<([^<>]+)>$/);
+  return isEmail(m ? m[2] : s);
+}
+
+function setEmailConfig(patch = {}) {
+  for (const [field, spec] of Object.entries(EMAIL_KEYS)) {
+    if (!(field in patch) || patch[field] == null) continue;
+    const value = patch[field];
+    if (spec.type === "bool") {
+      setRaw(spec.key, value ? "true" : "false");
+    } else if (spec.type === "number") {
+      const n = Number(value);
+      if (!Number.isFinite(n)) throw new Error(`${field} debe ser un número`);
+      if (spec.min != null && n < spec.min) throw new Error(`${field} mínimo ${spec.min}`);
+      if (spec.max != null && n > spec.max) throw new Error(`${field} máximo ${spec.max}`);
+      setRaw(spec.key, String(n));
+    } else {
+      const s = String(value).trim();
+      // Vaciar es una acción válida y significa "volver al default/omitir".
+      if (s === "") { db.prepare("DELETE FROM settings WHERE key = ?").run(spec.key); continue; }
+      if (field === "from" && !isFromAddress(s)) {
+        throw new Error('from inválido: usa "Nombre <correo@dominio.cl>" o "correo@dominio.cl"');
+      }
+      if ((field === "replyTo" || field === "internalTo") && !isEmail(s)) {
+        throw new Error(`${field} inválido: debe ser un correo (o vacío para desactivarlo)`);
+      }
+      if (field === "cartCouponCode" && !/^[A-Za-z0-9._-]{2,40}$/.test(s)) {
+        throw new Error("cartCouponCode inválido: 2–40 caracteres alfanuméricos, punto, guion o guion bajo");
+      }
+      setRaw(spec.key, s);
+    }
+  }
+  return getEmailConfig();
+}
+
 module.exports = {
   getRaw, setRaw,
   getPaymentFee, setPaymentFee,
   getTradeinPrices, setTradeinPrices, resetTradeinPrices,
+  getEmailConfig, setEmailConfig, isEmail, EMAIL_DEFAULTS,
 };

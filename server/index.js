@@ -31,6 +31,8 @@ const mercadopagoRouter = require("./routes/mercadopago");
 const chilexpressRouter = require("./routes/chilexpress");
 const ordersRouter = require("./routes/orders");
 const adminRouter = require("./routes/admin");
+const emailsRouter = require("./routes/emails");
+const emailScheduler = require("./lib/email-scheduler");
 const { buildDataJs, buildPublicCatalog } = require("./lib/catalog");
 
 const app = express();
@@ -60,7 +62,16 @@ app.use(helmet({
 }));
 
 app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({
+  limit: "1mb",
+  // El webhook de Resend firma el CUERPO CRUDO (esquema Svix). Re-serializar el
+  // JSON parseado cambia orden de keys y espaciado, así que la firma no
+  // calzaría nunca. Guardamos el buffer SOLO para esa ruta — hacerlo para todo
+  // duplicaría en memoria cada request del admin sin necesidad.
+  verify(req, _res, buf) {
+    if (req.url && req.url.startsWith("/api/emails/webhook")) req.rawBody = buf;
+  },
+}));
 
 // Sessions (admin)
 app.use(session({
@@ -91,6 +102,26 @@ app.get("/api/health", (_req, res) => {
   // Conteo de órdenes (sin PII) para monitoreo.
   let orders = {};
   try { orders.total = db.prepare("SELECT COUNT(*) AS n FROM orders").get().n; } catch (e) { orders.err = e.message; }
+  // Diagnóstico de emails/carritos. Sin API keys ni direcciones de clientes:
+  // solo si está configurado y si el remitente/reply-to están definidos.
+  let emails = {};
+  try {
+    const cfg = require("./lib/settings").getEmailConfig();
+    const mailer = require("./lib/mailer");
+    emails = {
+      enabled: cfg.enabled,
+      provider: require("./lib/resend").isConfigured() ? "resend" : "dry-run",
+      webhookSecretConfigured: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+      from: cfg.from,
+      replyToConfigured: Boolean(cfg.replyTo),
+      internalToConfigured: Boolean(cfg.internalTo),
+      captureEnabled: cfg.captureEnabled,
+      cartReminders: cfg.cartRemindersEnabled,
+      scheduler: require("./lib/email-scheduler").status(),
+      stats: mailer.stats(),
+      carts: db.prepare("SELECT COUNT(*) AS n FROM carts").get().n,
+    };
+  } catch (e) { emails.err = e.message; }
   res.json({
     ok: true,
     build: BUILD_SHA,
@@ -104,6 +135,7 @@ app.get("/api/health", (_req, res) => {
     },
     db: { ok: true, products: productCount, users: userCount, path: db.DB_PATH },
     orders,
+    emails,
   });
 });
 
@@ -155,6 +187,9 @@ app.use("/api/mercadopago", mercadopagoRouter);
 app.use("/api/chilexpress", chilexpressRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/admin", adminRouter);
+// Carrito capturado + baja de emails + webhook de Resend. Monta /api/cart/* y
+// /api/emails/* (el router define ambos prefijos internamente).
+app.use("/api", emailsRouter);
 
 // ---------- Tracking de visitas (analítica del admin) ----------
 const trackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: false, legacyHeaders: false });
@@ -268,6 +303,9 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
 // ---------- Backups en background ----------
 backup.start();
 
+// ---------- Emails diferidos (carritos abandonados + follow-up) ----------
+emailScheduler.start();
+
 app.listen(PORT, () => {
   console.log(`iPhone UP server listening on ${PUBLIC_URL} (port ${PORT}) — build ${BUILD_SHA}`);
   console.log(`[boot] USE_DB_CATALOG=${USE_DB_CATALOG}`);
@@ -275,4 +313,6 @@ app.listen(PORT, () => {
   if (!process.env.MP_WEBHOOK_SECRET) console.warn("⚠️  MP_WEBHOOK_SECRET no configurado — webhook sin firma (inseguro)");
   if (!process.env.SESSION_SECRET) console.warn("⚠️  SESSION_SECRET no configurado — admin usa secret inseguro");
   if (!process.env.CHILEXPRESS_API_KEY_RATING) console.log("ℹ️  Sin Chilexpress API — usando tarifas fallback por región");
+  if (!process.env.RESEND_API_KEY) console.log("ℹ️  Sin RESEND_API_KEY — emails en modo dry-run (se renderizan y loguean, no se envían)");
+  else if (!process.env.RESEND_WEBHOOK_SECRET) console.warn("⚠️  RESEND_WEBHOOK_SECRET no configurado — webhook de emails sin firma (inseguro)");
 });

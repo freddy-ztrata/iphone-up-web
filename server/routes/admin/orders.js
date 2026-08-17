@@ -15,6 +15,7 @@ const db = require("../../db");
 const audit = require("../../lib/audit");
 const stock = require("../../lib/stock");
 const tz = require("../../lib/tz");
+const mailer = require("../../lib/mailer");
 const { requireAdmin } = require("../../middleware/auth");
 
 const router = express.Router();
@@ -239,6 +240,48 @@ const UPDATE_FULFILLMENT = db.prepare(`
 const UPDATE_PAYMENT_STATUS = db.prepare(`
   UPDATE orders SET status = @status, updated_at = datetime('now') WHERE id = @id
 `);
+// Sella el momento de la entrega la PRIMERA vez que la orden pasa a 'delivered'.
+// El follow-up se agenda contra esta fecha y no contra `updated_at`, que se
+// mueve con cualquier edición posterior (una nota, un tracking corregido).
+const STAMP_DELIVERED = db.prepare(`
+  UPDATE orders SET delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id = ?
+`);
+
+// Emails que dispara un cambio de fulfillment. Se llama DESPUÉS de responder al
+// admin y con todo aislado: que un email falle no puede hacer fallar el guardado
+// del estado de envío.
+function notifyFulfillment(orderRow, newStatus) {
+  try {
+    const buyer = safeParse(orderRow.buyer_json, {}) || {};
+    if (!buyer.email) return;
+    const template = newStatus === "shipped" ? "order_shipped"
+      : newStatus === "delivered" ? "order_delivered"
+      : null;
+    if (!template) return;
+    mailer.sendSafe({
+      template,
+      to: buyer.email,
+      orderId: orderRow.id,
+      // Si el estado va y vuelve (shipped → preparing → shipped) no se
+      // reenvía: la key es única por orden y template.
+      idempotencyKey: `${template}:${orderRow.id}`,
+      data: {
+        order: {
+          id: orderRow.id,
+          buyer,
+          items: safeParse(orderRow.items_json, []) || [],
+          shipping: safeParse(orderRow.shipping_json, {}) || {},
+          tracking_code: orderRow.tracking_code || null,
+          tracking_carrier: orderRow.tracking_carrier || null,
+          total: orderRow.total,
+          subtotal: orderRow.subtotal,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[orders] email de fulfillment:", err.message);
+  }
+}
 
 router.patch("/:id", (req, res) => {
   const before = GET.get(req.params.id);
@@ -272,8 +315,16 @@ router.patch("/:id", (req, res) => {
     admin_notes: admin_notes === undefined ? null : String(admin_notes),
   });
   if (status !== undefined) UPDATE_PAYMENT_STATUS.run({ id: req.params.id, status });
+  if (fulfillment_status === "delivered") STAMP_DELIVERED.run(req.params.id);
 
   const after = GET.get(req.params.id);
+
+  // Solo avisamos en la TRANSICIÓN. Guardar de nuevo una orden ya enviada (para
+  // corregir una nota) no debe volver a escribirle al cliente.
+  if (fulfillment_status !== undefined && fulfillment_status !== before.fulfillment_status) {
+    notifyFulfillment(after, fulfillment_status);
+  }
+
   audit.log(req, {
     action: "update", entity_type: "order", entity_id: req.params.id,
     before: {
@@ -419,6 +470,10 @@ router.post("/", (req, res) => {
       if (status === "approved") {
         stockResult = stock.commitOrderSale({ id, items: resolved });
       }
+      // Una venta en tienda nace entregada: sellamos la fecha para que el
+      // follow-up post-entrega la tome. NO mandamos confirmación de pago ni de
+      // entrega — el cliente está en el mostrador, un email ahí es ruido.
+      if (fulfillment_status === "delivered") STAMP_DELIVERED.run(id);
     })();
   } catch (err) {
     return res.status(500).json({ error: "No se pudo registrar la venta: " + err.message });
