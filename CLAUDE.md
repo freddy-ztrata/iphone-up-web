@@ -30,6 +30,7 @@ server/lib/settings.js       → get/set de la tabla `settings` (config editable
 server/lib/resend.js         → Cliente HTTP de Resend (sin SDK). Dry-run si no hay API key
 server/lib/mailer.js         → ÚNICA puerta de salida de emails: settings → exclusiones → idempotencia → render → envío
 server/lib/email-templates.js→ Templates HTML + texto plano (todo dato externo pasa por esc())
+server/lib/email-fixtures.js → Datos ficticios por template + whitelist de lo probable desde el admin
 server/lib/email-token.js    → HMAC de los links de baja (unsubscribe)
 server/lib/resend-signature.js → verify() de la firma Svix del webhook de Resend
 server/lib/email-scheduler.js→ setInterval: vence carros, manda recordatorios y follow-ups
@@ -107,7 +108,7 @@ En local default es `./data` (ver env `DATA_DIR`).
 | GET/PATCH | `/api/admin/emails/config`              | Config de emails + estado del proveedor (PATCH = admin) |
 | GET    | `/api/admin/emails/log`                    | Historial de envíos con filtros y paginación |
 | GET/POST/DELETE | `/api/admin/emails/suppressions`  | Lista de exclusión (escribir = admin)      |
-| POST   | `/api/admin/emails/test`                   | Email de prueba al admin logueado (admin)  |
+| POST   | `/api/admin/emails/test`                   | Prueba de CUALQUIER template con datos ficticios (admin). `{template?, to?}`; sin `to` va al admin logueado |
 | POST   | `/api/admin/emails/run-scheduler`          | Fuerza un ciclo del scheduler (admin)      |
 
 ## Run locally
@@ -295,7 +296,7 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 4. Stock — pivote capacidad × color por modelo
 5. Cupones — cards tipo ticket, CRUD completo (crear y editar usan el mismo formulario)
 6. Órdenes — búsqueda + filtros (pago/envío/canal/fechas) + paginación server-side, export CSV, alta manual, y drawer con tabs Detalle / Preparación / Historial
-7. Settings — tabs Usuarios / Audit log / Sistema. La tab **Sistema** incluye la **Comisión medio de pago** (switch on/off + % editable → `PATCH /api/admin/settings/payment-fee`) y los **precios de recompra** (trade-in editable como JSON).
+7. Settings — tabs Usuarios / Audit log / Sistema / Emails. En **Emails → Configuración** hay un botón de prueba **por cada template** (`POST /api/admin/emails/test` con `{template}`): usa los fixtures de `server/lib/email-fixtures.js`, marca el asunto con `[PRUEBA]`, no toca órdenes/carritos/stock y por default va al correo del admin logueado. El aviso interno se prueba contra ese destinatario, así que funciona aunque `internalTo` esté vacío. La tab **Sistema** incluye la **Comisión medio de pago** (switch on/off + % editable → `PATCH /api/admin/settings/payment-fee`) y los **precios de recompra** (trade-in editable como JSON).
 
 **Atajos**: `⌘K` command palette (navega, crea, exporta y abre productos/órdenes por nombre), `G+P/O/S/C/D/U` navegación, `Esc` cerrar drawer/palette.
 

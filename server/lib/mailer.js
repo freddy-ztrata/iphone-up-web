@@ -147,6 +147,8 @@ function stats() {
  * @param {number} [params.cartId]
  * @param {string} [params.idempotencyKey] default: template + orderId/cartId/to
  * @param {boolean} [params.force]        ignora la key ya usada (reenvío manual del admin)
+ * @param {string} [params.subjectPrefix] se antepone al asunto renderizado
+ *                                        (las pruebas del panel mandan "[PRUEBA] ")
  * @returns {Promise<object>} { ok, status, skipped?, reason?, logId?, providerId?, dryRun? }
  */
 async function send(params = {}) {
@@ -157,6 +159,7 @@ async function send(params = {}) {
     orderId = null,
     cartId = null,
     force = false,
+    subjectPrefix = "",
   } = params;
 
   try {
@@ -241,6 +244,10 @@ async function send(params = {}) {
       return { ok: false, status: "failed", reason: `render: ${err.message}` };
     }
 
+    // El prefijo va acá y no dentro del template: los templates son los mismos
+    // que ve el cliente y no tienen que saber que existe un modo prueba.
+    const subject = `${subjectPrefix}${rendered.subject}`.slice(0, 200);
+
     // RFC 8058: List-Unsubscribe + -Post permite el botón nativo de "dar de
     // baja" de Gmail/Apple Mail. Solo en lo no transaccional.
     const headers = {};
@@ -253,7 +260,7 @@ async function send(params = {}) {
     const result = await resend.send({
       from: config.from,
       to: recipient,
-      subject: rendered.subject,
+      subject,
       html: rendered.html,
       text: rendered.text,
       replyTo: config.replyTo || undefined,
@@ -266,7 +273,7 @@ async function send(params = {}) {
     FINISH.run({
       idempotency_key: idempotencyKey,
       status,
-      subject: rendered.subject,
+      subject,
       provider: result.dryRun ? "dry-run" : "resend",
       provider_id: result.id || null,
       error: result.error || null,
@@ -282,7 +289,7 @@ async function send(params = {}) {
       providerId: result.id || null,
       reason: result.error || null,
       logId: row?.id || null,
-      subject: rendered.subject,
+      subject,
     };
   } catch (err) {
     // Red de seguridad final: pase lo que pase, no propagamos.

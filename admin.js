@@ -35,9 +35,12 @@ function adminApp() {
     cartDrawer: { open: false, loading: false, cart: null, reminding: false },
 
     // Emails: config + log + supresiones
+    // `templates` son los que se pueden probar (los manda /emails/config como
+    // `testable`); `testResults` es el historial en pantalla de esta sesión.
     emails: {
       config: null, provider: null, scheduler: null, stats: null, pending: null,
       loading: false, saving: false, testing: false, running: false, testTo: "",
+      templates: [], testingId: "", testResults: [],
     },
     emailLog: [],
     emailLogQuery: { template: "", status: "", to_email: "" },
@@ -684,6 +687,7 @@ function adminApp() {
         this.emails.scheduler = data.scheduler;
         this.emails.stats = data.stats;
         this.emails.pending = data.pending;
+        this.emails.templates = data.testable || [];
       } catch (err) { this.toast(err.message, "error"); }
       finally { this.emails.loading = false; }
     },
@@ -717,19 +721,60 @@ function adminApp() {
       finally { this.emails.saving = false; }
     },
 
-    async sendTestEmail() {
+    // Etiqueta legible de un template probable (cae al id si todavía no cargó).
+    templateLabel(id) {
+      return this.emails.templates.find(t => t.id === id)?.label || id;
+    },
+
+    /**
+     * Manda UN template con datos ficticios. Sin argumento va el de siempre
+     * ("test"), que es solo el chequeo de conexión con el proveedor.
+     * El destinatario por default es la cuenta del admin logueado; el server
+     * vuelve a validar todo (whitelist de template y formato del correo).
+     */
+    async sendTestEmail(template = "test") {
       if (this.emails.testing) return;
       const to = (this.emails.testTo || "").trim() || this.session?.email;
-      if (!(await this.askConfirm(`¿Enviar un email de prueba a ${to}?`))) return;
+      const label = this.templateLabel(template);
+      if (!(await this.askConfirm(`¿Enviar "${label}" con datos de prueba a ${to}?`))) return;
       this.emails.testing = true;
+      this.emails.testingId = template;
       try {
-        const { result } = await this.api("POST", "/emails/test", { to: this.emails.testTo || undefined });
+        const { result } = await this.api("POST", "/emails/test", {
+          template,
+          to: this.emails.testTo || undefined,
+        });
+        this.pushTestResult(result);
         this.toast(result?.dryRun
-          ? "Renderizado en dry-run (sin RESEND_API_KEY no se envía nada)"
-          : "Email de prueba enviado ✓", "success");
-        this.loadEmailLog();
-      } catch (err) { this.toast(err.message, "error"); }
-      finally { this.emails.testing = false; }
+          ? `${label}: renderizado en dry-run (sin RESEND_API_KEY no se envía nada)`
+          : `${label}: ${result?.modeLabel || "enviado"} ✓`,
+          result?.mode === "live" || result?.mode === "dry-run" ? "success" : "error");
+        if (this.emailTab === "log") this.loadEmailLog();
+      } catch (err) {
+        // El 502 del server ya trae el motivo; acá solo queda el mensaje.
+        this.pushTestResult({ template, templateLabel: label, to, mode: "error", modeLabel: "Falló", subject: err.message });
+        this.toast(err.message, "error");
+      } finally {
+        this.emails.testing = false;
+        this.emails.testingId = "";
+      }
+    },
+
+    // Últimos resultados arriba. El `key` es propio y no el índice: con unshift
+    // los índices se corren y Alpine reusaría el nodo equivocado.
+    _testResultSeq: 0,
+    pushTestResult(result) {
+      this.emails.testResults = [
+        { key: ++this._testResultSeq, ...result },
+        ...this.emails.testResults,
+      ].slice(0, 12);
+    },
+
+    // Misma paleta que el resto de los estados del panel.
+    testModeClass(mode) {
+      if (mode === "live") return "state-approved";
+      if (mode === "dry-run") return "state-pending";
+      return "state-rejected";
     },
 
     async runEmailScheduler() {

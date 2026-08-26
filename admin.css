@@ -1168,6 +1168,49 @@
 /* Fila de la lista de exclusión: reusa .ac-user-row pero sin avatar ni pill de
    estado, así que redefine las columnas (email · motivo · quitar). */
 .ac-supp-row { grid-template-columns: 1fr auto 40px; }
+/* Un botón por template en "Probar los emails". Grilla fluida: los ~8 templates
+   entran en dos filas en desktop y en una columna en mobile sin media query. */
+.ac-test-grid {
+  display: grid; gap: 10px; margin: 16px 0 4px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.ac-test-btn {
+  display: flex; flex-direction: column; gap: 5px; text-align: left;
+  padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); font: inherit; transition: border-color .15s, background .15s;
+}
+.ac-test-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--surface-3); }
+.ac-test-btn:disabled { opacity: .5; cursor: default; }
+.ac-test-btn.busy { border-color: var(--accent); opacity: 1; }
+.ac-test-btn-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 13px; font-weight: 600;
+}
+.ac-test-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft-bg);
+  padding: 2px 7px; border-radius: 20px; white-space: nowrap;
+}
+.ac-test-btn-desc { font-size: 12px; color: var(--text-mute); line-height: 1.45; }
+
+/* Resultado de cada prueba: estado · template + asunto · destinatario. */
+.ac-test-results {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ac-test-result { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.ac-test-result-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ac-test-result-body span {
+  font-size: 12px; color: var(--text-mute);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ac-test-result-to { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+@media (max-width: 700px) {
+  .ac-test-result { flex-wrap: wrap; }
+  .ac-test-result-to { width: 100%; }
+}
+
 /* Lista compacta de emails dentro del drawer de carrito. */
 .ac-email-mini { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .ac-email-mini-row {

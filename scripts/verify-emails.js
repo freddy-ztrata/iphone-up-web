@@ -37,6 +37,7 @@ const emailToken = require("../server/lib/email-token");
 const resendSignature = require("../server/lib/resend-signature");
 const resend = require("../server/lib/resend");
 const mailer = require("../server/lib/mailer");
+const fixtures = require("../server/lib/email-fixtures");
 const carts = require("../server/lib/carts");
 const scheduler = require("../server/lib/email-scheduler");
 const storage = require("../server/lib/storage");
@@ -676,6 +677,120 @@ async function main() {
   await checkAsync("una orden nula no manda un aviso vacío", async () => {
     const r = await mailer.notifyInternal(null);
     assertEq(r.skipped, true);
+  });
+
+  // ==========================================================
+  section("Pruebas de email desde el panel (fixtures)");
+  // ==========================================================
+  // Lo que garantizamos: que se puedan probar TODOS los templates, que los
+  // datos sean inventados, que la prueba no escriba en orders/carts/variants y
+  // que el asunto salga marcado.
+  check("todos los templates registrados tienen fixture", () => {
+    const missing = fixtures.missingFixtures();
+    assert(missing.length === 0, "sin datos de prueba: " + missing.join(", "));
+    assertEq(fixtures.list().length, templates.TEMPLATE_IDS.length, "cantidad de pruebas expuestas:");
+  });
+
+  check("cada prueba viene con etiqueta, grupo y descripción para el panel", () => {
+    for (const t of fixtures.list()) {
+      assert(t.label && t.label !== t.id, `${t.id} sin etiqueta legible`);
+      assert(t.group, `${t.id} sin grupo`);
+      assert(t.description, `${t.id} sin descripción`);
+    }
+  });
+
+  check("la whitelist rechaza lo que no es un template propio", () => {
+    for (const bad of ["__proto__", "constructor", "toString", "order_paid ", "", "hasOwnProperty", "nope"]) {
+      assertEq(fixtures.isTestable(bad), false, `aceptó ${JSON.stringify(bad)}:`);
+    }
+  });
+
+  check("los fixtures renderizan completo, sin undefined ni NaN", () => {
+    for (const t of fixtures.list()) {
+      const data = fixtures.build(t.id, { config: settings.getEmailConfig(), requestedBy: "admin@iphoneup.cl" });
+      assert(data, `${t.id} no devolvió datos`);
+      const r = templates.render(t.id, {
+        ...data,
+        publicUrl: "https://iphoneup.cl",
+        unsubscribeUrl: t.transactional ? null : "https://iphoneup.cl/api/emails/unsubscribe?e=a%40b.cl&t=xyz",
+        config: settings.getEmailConfig(),
+        providerLabel: "dry-run",
+      });
+      assert(r.subject, `${t.id} sin asunto`);
+      for (const field of ["subject", "html", "text"]) {
+        assert(!/undefined|NaN|\[object Object\]/.test(r[field]), `${t.id}: ${field} tiene un hueco sin dato`);
+      }
+      assert(!/\$0\b/.test(r.text), `${t.id}: aparece un total en cero`);
+    }
+  });
+
+  check("los datos del fixture se identifican como prueba", () => {
+    const data = fixtures.build("order_paid", {});
+    assertEq(data.order.id, fixtures.FAKE_ORDER_ID);
+    assert(/prueba/i.test(data.order.buyer.name), "el comprador no dice que es de prueba");
+    assert(data.order.buyer.email.endsWith("@example.com"), "el email del fixture no es de un dominio reservado");
+    assertEq(data.meta.test, true);
+    assertEq(data.order.total, data.order.subtotal + Math.round(data.order.subtotal * 0.035) + 5990);
+  });
+
+  await checkAsync("el mailer antepone [PRUEBA] al asunto", async () => {
+    const r = await mailer.send({
+      template: "order_paid",
+      to: "admin.verify@iphoneup.cl",
+      force: true,
+      subjectPrefix: fixtures.SUBJECT_PREFIX,
+      data: fixtures.build("order_paid", {}),
+    });
+    assertEq(r.status, "dry_run");
+    assert(r.subject.startsWith("[PRUEBA] "), "asunto sin marcar: " + r.subject);
+    const row = db.prepare("SELECT subject, meta_json FROM email_log WHERE id = ?").get(r.logId);
+    assert(row.subject.startsWith("[PRUEBA] "), "el log guardó el asunto sin marcar");
+    assertEq(JSON.parse(row.meta_json).test, true);
+  });
+
+  await checkAsync("una prueba no toca órdenes, carritos ni stock", async () => {
+    const snapshot = () => ({
+      orders: db.prepare("SELECT COUNT(*) AS n FROM orders").get().n,
+      carts: db.prepare("SELECT COUNT(*) AS n FROM carts").get().n,
+      movements: db.prepare("SELECT COUNT(*) AS n FROM stock_movements").get().n,
+      stock: db.prepare("SELECT COALESCE(SUM(stock),0) AS n FROM variants").get().n,
+    });
+    const before = snapshot();
+    for (const t of fixtures.list()) {
+      await mailer.send({
+        template: t.id, to: "admin.verify@iphoneup.cl", force: true,
+        subjectPrefix: fixtures.SUBJECT_PREFIX,
+        data: fixtures.build(t.id, { config: settings.getEmailConfig() }),
+      });
+    }
+    assertEq(JSON.stringify(snapshot()), JSON.stringify(before), "algo mutó durante las pruebas:");
+  });
+
+  await checkAsync("el aviso interno se puede probar con la config vacía", async () => {
+    settings.setEmailConfig({ internalTo: "" });
+    const r = await mailer.send({
+      template: "internal_new_order",
+      to: "admin.verify@iphoneup.cl",
+      force: true,
+      subjectPrefix: fixtures.SUBJECT_PREFIX,
+      data: fixtures.build("internal_new_order", {}),
+    });
+    assertEq(r.status, "dry_run");
+    assertEq(settings.getEmailConfig().internalTo, "", "la prueba guardó el destinatario como configuración");
+  });
+
+  await checkAsync("dos pruebas seguidas del mismo template no chocan con la idempotencia", async () => {
+    const opts = {
+      template: "cart_reminder_1h", to: "admin.verify@iphoneup.cl", force: true,
+      idempotencyKey: "test:cart_reminder_1h:admin.verify@iphoneup.cl",
+      subjectPrefix: fixtures.SUBJECT_PREFIX,
+      data: fixtures.build("cart_reminder_1h", { config: settings.getEmailConfig() }),
+    };
+    const a = await mailer.send(opts);
+    const b = await mailer.send(opts);
+    assertEq(a.status, "dry_run");
+    assertEq(b.status, "dry_run");
+    assert(a.logId !== b.logId, "la segunda prueba reusó la fila de la primera");
   });
 
   // ==========================================================

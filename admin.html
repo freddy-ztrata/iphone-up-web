@@ -814,17 +814,51 @@
             </template>
 
             <div class="ac-setting-card">
-              <h3 class="ac-an-card-title">Probar</h3>
+              <h3 class="ac-an-card-title">Probar los emails</h3>
               <div class="ac-edit-grid">
                 <div class="ac-edit-field">
-                  <span>Enviar prueba a</span>
+                  <span>Enviar pruebas a</span>
                   <input type="email" x-model="emails.testTo" :placeholder="session?.email || 'tu correo'" />
                 </div>
               </div>
-              <p class="ac-edit-hint">Vacío = tu propia cuenta. En dry-run no sale nada de la máquina; queda en el historial.</p>
+              <p class="ac-edit-hint">
+                Vacío = tu propia cuenta. Cada prueba se arma con datos ficticios (orden
+                <code>ORD-PRUEBA-0000</code>, cliente de prueba) y llega con el asunto prefijado
+                <code>[PRUEBA]</code>: no se toca ninguna orden, carrito ni stock real.
+                En dry-run no sale nada del servidor, pero queda en el historial.
+                El <strong>aviso interno</strong> se manda a esta dirección, así que se puede probar
+                aunque el correo interno de arriba esté vacío (y no lo guarda como configuración).
+              </p>
+
+              <div class="ac-test-grid">
+                <template x-for="t in emails.templates" :key="t.id">
+                  <button class="ac-test-btn" @click="sendTestEmail(t.id)"
+                          :class="{ busy: emails.testingId === t.id }" :disabled="emails.testing">
+                    <span class="ac-test-btn-head">
+                      <span x-text="t.label"></span>
+                      <span class="ac-test-tag" x-text="emails.testingId === t.id ? 'Enviando…' : t.group"></span>
+                    </span>
+                    <span class="ac-test-btn-desc" x-text="t.description"></span>
+                  </button>
+                </template>
+              </div>
+              <p class="ac-edit-hint" x-show="!emails.templates.length">Cargando los templates…</p>
+
+              <!-- Resultado de cada prueba: modo (live / dry-run / falló), template y asunto. -->
+              <div class="ac-test-results" x-show="emails.testResults.length">
+                <template x-for="r in emails.testResults" :key="r.key">
+                  <div class="ac-test-result">
+                    <span class="ac-state-pill" :class="testModeClass(r.mode)" x-text="r.modeLabel || r.mode"></span>
+                    <div class="ac-test-result-body">
+                      <strong x-text="r.templateLabel || r.template"></strong>
+                      <span x-text="r.subject || 'sin asunto'"></span>
+                    </div>
+                    <span class="ac-test-result-to" x-text="r.to"></span>
+                  </div>
+                </template>
+              </div>
+
               <div class="ac-setting-actions">
-                <button class="ac-btn-primary" @click="sendTestEmail()" :disabled="emails.testing"
-                        x-text="emails.testing ? 'Enviando…' : 'Enviar prueba'"></button>
                 <button class="ac-btn-ghost" @click="runEmailScheduler()" :disabled="emails.running"
                         x-text="emails.running ? 'Procesando…' : 'Correr el ciclo ahora'"></button>
               </div>

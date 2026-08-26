@@ -315,6 +315,65 @@ async function main() {
     const r = await req("POST", "/api/admin/emails/test", { auth: true, body: {} });
     assertEq(r.status, 200);
     assertEq(r.json.result.status, "dry_run");
+    assertEq(r.json.result.template, "test", "sin `template` debería caer al de siempre");
+  });
+
+  // Un botón por template en el panel: acá se prueban todos, uno por uno.
+  await check("se puede probar CADA template con datos ficticios", async () => {
+    const cfg = await req("GET", "/api/admin/emails/config", { auth: true });
+    const testable = cfg.json.testable || [];
+    assert(testable.length >= 8, `esperaba ≥8 templates probables, hay ${testable.length}`);
+    for (const t of testable) {
+      const r = await req("POST", "/api/admin/emails/test", { auth: true, body: { template: t.id } });
+      assertEq(r.status, 200, `${t.id}:`);
+      assertEq(r.json.result.status, "dry_run", `${t.id}:`);
+      assertEq(r.json.result.mode, "dry-run", `${t.id}:`);
+      assert(r.json.result.subject.startsWith("[PRUEBA] "), `${t.id}: asunto sin marcar`);
+      assert(r.json.result.templateLabel, `${t.id}: falta la etiqueta en la respuesta`);
+      // Sin `to` explícito tiene que ir al admin logueado, no a un fijo.
+      assertEq(r.json.result.to, ADMIN_EMAIL, `${t.id}: destinatario por default`);
+    }
+  });
+
+  await check("el aviso interno se prueba aunque internalTo esté vacío y no lo guarda", async () => {
+    await req("PATCH", "/api/admin/emails/config", { auth: true, body: { internalTo: "" } });
+    const r = await req("POST", "/api/admin/emails/test", { auth: true, body: { template: "internal_new_order" } });
+    assertEq(r.status, 200);
+    assertEq(r.json.result.status, "dry_run");
+    assertEq(r.json.result.to, ADMIN_EMAIL);
+    const cfg = await req("GET", "/api/admin/emails/config", { auth: true });
+    assertEq(cfg.json.config.internalTo, "", "la prueba dejó el destinatario guardado en la config");
+  });
+
+  await check("la prueba acepta otro destinatario válido y rechaza uno inválido", async () => {
+    const ok = await req("POST", "/api/admin/emails/test", { auth: true, body: { template: "order_paid", to: "otro.destino@example.com" } });
+    assertEq(ok.status, 200);
+    assertEq(ok.json.result.to, "otro.destino@example.com");
+    const bad = await req("POST", "/api/admin/emails/test", { auth: true, body: { to: "no-es-un-correo" } });
+    assertEq(bad.status, 400, "debería rechazar un destinatario inválido");
+  });
+
+  await check("la whitelist de templates rechaza lo que no está registrado", async () => {
+    for (const bad of ["__proto__", "constructor", "toString", "no_existe"]) {
+      const r = await req("POST", "/api/admin/emails/test", { auth: true, body: { template: bad } });
+      assertEq(r.status, 400, `aceptó ${bad}:`);
+    }
+  });
+
+  await check("las pruebas quedan en el historial marcadas y no inventan órdenes", async () => {
+    const r = await req("GET", "/api/admin/emails/log?template=order_paid", { auth: true });
+    assertEq(r.status, 200);
+    const test = (r.json.entries || []).find(e => (e.subject || "").startsWith("[PRUEBA] "));
+    assert(test, "no quedó registrada la prueba de order_paid");
+    assertEq(test.order_id, null, "la prueba colgó la fila de una orden inexistente");
+    assertEq(test.status, "dry_run");
+  });
+
+  await check("la prueba queda en el audit log", async () => {
+    const r = await req("GET", "/api/admin/audit-log?entity_type=email", { auth: true });
+    assertEq(r.status, 200);
+    const entries = r.json.entries || r.json;
+    assert(entries.some(e => e.entity_id === "order_paid"), "no quedó rastro de la prueba de order_paid");
   });
 
   await check("POST /api/admin/emails/run-scheduler corre un ciclo", async () => {
