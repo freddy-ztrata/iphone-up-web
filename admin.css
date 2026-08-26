@@ -685,15 +685,99 @@
   color: var(--text-dim);
 }
 
-/* System info */
+/* ============== AJUSTES → SISTEMA ============== */
+.ac-sys { max-width: 720px; }
+.ac-sys-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+
+/* Semáforo general: el punto y el borde llevan el tono, el texto queda legible. */
+.ac-sys-overall {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 16px; padding: 18px; margin-bottom: 16px;
+}
+.ac-sys-overall strong { font-size: 16px; }
+.ac-sys-overall p { margin: 3px 0 0; font-size: 13px; color: var(--text-dim); }
+.ac-sys-overall.ok { border-color: var(--border-glow); box-shadow: 0 0 32px rgba(164,232,58,0.08); }
+.ac-sys-overall.warn { border-color: rgba(255,169,64,0.35); }
+.ac-sys-overall.bad { border-color: rgba(255,90,90,0.35); }
+.ac-sys-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  flex: 0 0 auto; background: var(--text-mute);
+}
+.ac-sys-overall.ok .ac-sys-dot { background: var(--ok); box-shadow: 0 0 12px rgba(110,227,107,0.55); }
+.ac-sys-overall.warn .ac-sys-dot { background: var(--warn); box-shadow: 0 0 12px rgba(255,169,64,0.5); }
+.ac-sys-overall.bad .ac-sys-dot { background: var(--danger); box-shadow: 0 0 12px rgba(255,90,90,0.5); }
+
+.ac-sys-list {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2px 18px; margin-bottom: 16px;
+}
+.ac-sys-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.ac-sys-row:last-child { border-bottom: none; }
+.ac-sys-row-main {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0; margin-right: auto;
+}
+.ac-sys-row-main strong { font-size: 14px; }
+.ac-sys-row-main span { font-size: 12px; color: var(--text-mute); }
+.ac-sys-pill {
+  flex: 0 0 auto;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 4px 12px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-dim);
+}
+.ac-sys-pill.ok { background: rgba(110,227,107,0.12); color: var(--ok); }
+.ac-sys-pill.warn { background: rgba(255,169,64,0.12); color: var(--warn); }
+.ac-sys-pill.bad { background: rgba(255,90,90,0.12); color: var(--danger); }
+
+.ac-sys-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.ac-sys-metric {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px;
+}
+.ac-sys-metric-label {
+  display: block;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-mute);
+}
+.ac-sys-metric-value {
+  display: block; margin-top: 6px;
+  font-size: 20px; font-weight: 800;
+  font-feature-settings: "tnum" 1;
+}
+.ac-sys-metric-value.ok { font-size: 16px; color: var(--ok); }
+.ac-sys-metric-value.bad { font-size: 16px; color: var(--danger); }
+
+.ac-sys-tech .ac-edit-hint { margin: 8px 0 0; }
+
+/* JSON crudo: colapsado por default, solo para soporte. */
 .ac-system-info {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px;
+  margin-top: 12px;
+  max-height: 360px;
   font-size: 12px;
   color: var(--text-dim);
-  overflow-x: auto;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 700px) {
+  .ac-sys-row { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .ac-sys-head .ac-btn-ghost { width: 100%; }
 }
 
 /* ============== DRAWER ============== */

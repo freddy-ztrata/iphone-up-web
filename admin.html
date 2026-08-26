@@ -978,7 +978,66 @@
             </div>
           </div>
 
-          <pre class="ac-system-info" x-text="systemInfo ? JSON.stringify(systemInfo, null, 2) : 'cargando…'"></pre>
+          <!-- Estado del sistema. Antes esto era un volcado del JSON de
+               /api/health; ahora ese JSON vive detrás de "Ver diagnóstico
+               técnico" y lo que se ve por default son pills legibles. -->
+          <div class="ac-sys">
+            <div class="ac-sys-head">
+              <div>
+                <h3 class="ac-an-card-title">Estado del sistema</h3>
+                <p class="ac-page-sub" style="margin:2px 0 0">
+                  <span x-text="'Última actualización: ' + systemUpdatedLabel()"></span>
+                  <span x-show="systemInfo && systemInfo.build && systemInfo.build !== 'unknown'"
+                        x-text="' · versión ' + String(systemInfo && systemInfo.build).slice(0, 7)"></span>
+                </p>
+              </div>
+              <button class="ac-btn-ghost" @click="loadSystemInfo()" :disabled="system.loading"
+                      x-text="system.loading ? 'Actualizando…' : 'Actualizar diagnóstico'"></button>
+            </div>
+
+            <div class="ac-sys-overall" :class="systemOverall().tone">
+              <span class="ac-sys-dot"></span>
+              <div>
+                <strong x-text="systemOverall().label"></strong>
+                <p x-text="systemOverall().detail"></p>
+              </div>
+            </div>
+
+            <template x-if="systemInfo">
+              <div>
+                <div class="ac-sys-list">
+                  <template x-for="s in systemServices()" :key="s.id">
+                    <div class="ac-sys-row">
+                      <div class="ac-sys-row-main">
+                        <strong x-text="s.label"></strong>
+                        <span x-text="s.hint"></span>
+                      </div>
+                      <span class="ac-sys-pill" :class="s.state" x-text="s.pill"></span>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="ac-sys-metrics">
+                  <template x-for="m in systemMetrics()" :key="m.id">
+                    <div class="ac-sys-metric">
+                      <span class="ac-sys-metric-label" x-text="m.label"></span>
+                      <strong class="ac-sys-metric-value" :class="m.tone || ''" x-text="m.value"></strong>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="ac-sys-tech">
+                  <button class="ac-btn-ghost" @click="system.showJson = !system.showJson"
+                          x-text="system.showJson ? 'Ocultar diagnóstico técnico' : 'Ver diagnóstico técnico'"></button>
+                  <p class="ac-edit-hint">Datos crudos para soporte. No incluye claves ni rutas internas.</p>
+                  <pre class="ac-system-info" x-show="system.showJson" x-text="systemJson()"></pre>
+                </div>
+              </div>
+            </template>
+
+            <p class="ac-empty" x-show="system.error"
+               x-text="'No se pudo obtener el diagnóstico: ' + system.error"></p>
+          </div>
         </div>
       </section>
 

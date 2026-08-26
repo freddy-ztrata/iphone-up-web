@@ -21,6 +21,7 @@ function adminApp() {
     dashboard: null,
     analytics: { realtime: null, overview: null, days: 30 },
     systemInfo: null,
+    system: { loading: false, error: "", updatedAt: null, showJson: false },
     payFee: { enabled: true, pct: 3.5, saving: false },
     tradein: { text: "", isDefault: true, loading: false, saving: false },
     loadingProducts: false,
@@ -385,10 +386,123 @@ function adminApp() {
     },
 
     async loadSystemInfo() {
+      this.system.loading = true;
       try {
         const r = await fetch("/api/health");
+        if (!r.ok) throw new Error("el servidor respondió " + r.status);
         this.systemInfo = await r.json();
-      } catch {}
+        this.system.error = "";
+        this.system.updatedAt = new Date();
+      } catch (err) {
+        // Sin toast: esto se dispara solo al entrar a Ajustes. El error se
+        // muestra en la propia tarjeta de estado.
+        this.system.error = err.message || "no se pudo conectar";
+      } finally {
+        this.system.loading = false;
+      }
+    },
+
+    // ---- Ajustes → Sistema -------------------------------------------------
+    // El JSON de /api/health traducido a filas legibles. `state` mapea a las
+    // clases de pill (.ok / .warn / .bad) y es lo que resume systemOverall().
+    systemServices() {
+      const h = this.systemInfo;
+      if (!h) return [];
+      const env = h.env || {};
+      const em = h.emails || {};
+      const sch = em.scheduler || {};
+      // Si el bloque de emails vino con error, todo lo que cuelga de él es
+      // desconocido: se muestra en rojo en vez de mentir un "inactivo".
+      const emailsDown = Boolean(em.err);
+      const row = (id, label, hint, ok, okLabel, badLabel, badState) => ({
+        id, label, hint,
+        state: ok ? "ok" : (badState || "warn"),
+        pill: ok ? okLabel : badLabel,
+      });
+      return [
+        row("mp", "Mercado Pago", "Procesa los pagos del checkout.",
+            !!env.mpConfigured, "conectado", "pendiente", "bad"),
+        row("mp-webhook", "Webhook de Mercado Pago", "Confirma el pago y descuenta el stock.",
+            !!env.mpWebhookSecretConfigured, "firmado", "sin firma"),
+        row("chilexpress", "Chilexpress", "Cotiza el envío en el checkout.",
+            !!env.chilexpressConfigured, "conectado", "tarifas de respaldo"),
+        row("catalog", "Catálogo", "Origen de los precios que ve el público.",
+            !!env.useDbCatalog, "desde la base", "sin catálogo", "bad"),
+        row("resend", "Resend", "Proveedor que entrega los correos.",
+            !emailsDown && em.provider === "resend",
+            "conectado", emailsDown ? "no disponible" : "dry-run", emailsDown ? "bad" : "warn"),
+        row("resend-webhook", "Webhook de Resend", "Recibe rebotes y bajas de la lista.",
+            !emailsDown && !!em.webhookSecretConfigured,
+            "configurado", emailsDown ? "no disponible" : "pendiente", emailsDown ? "bad" : "warn"),
+        row("capture", "Captura de carritos", "Guarda el carro y el email del checkout.",
+            !emailsDown && !!em.captureEnabled,
+            "activa", emailsDown ? "no disponible" : "inactiva", emailsDown ? "bad" : "warn"),
+        // `sch.enabled` es el interruptor real (EMAIL_SCHEDULER_ENABLED).
+        // `sch.running` es solo el candado del tick en curso — dura milisegundos
+        // y no sirve para decir si el scheduler está prendido.
+        row("scheduler", "Scheduler de emails", this.schedulerHint(sch),
+            !emailsDown && !!sch.enabled,
+            "activo", emailsDown ? "no disponible" : "inactivo", emailsDown ? "bad" : "warn"),
+      ];
+    },
+
+    schedulerHint(sch) {
+      const base = sch && sch.intervalMinutes
+        ? `Recordatorios automáticos cada ${sch.intervalMinutes} min.`
+        : "Recordatorios automáticos de carritos.";
+      const at = sch && sch.lastRun && sch.lastRun.at;
+      return at ? `${base} Último ciclo ${this.timeAgo(at)}.` : `${base} Sin ciclos aún.`;
+    },
+
+    systemOverall() {
+      if (this.system.error) {
+        return { tone: "bad", label: "Sin conexión", detail: "No se pudo consultar el estado del servidor." };
+      }
+      if (!this.systemInfo) {
+        return { tone: "idle", label: "Consultando…", detail: "Pidiendo el diagnóstico al servidor." };
+      }
+      const svc = this.systemServices();
+      const bad = svc.filter(s => s.state === "bad").length;
+      const warn = svc.filter(s => s.state === "warn").length;
+      if (bad) return { tone: "bad", label: "Requiere atención", detail: `${bad} ${bad === 1 ? "servicio necesita" : "servicios necesitan"} revisión.` };
+      if (warn) return { tone: "warn", label: "Operativo con avisos", detail: `${warn} ${warn === 1 ? "servicio funciona" : "servicios funcionan"} en modo alternativo.` };
+      return { tone: "ok", label: "Todo operativo", detail: "Todos los servicios respondieron correctamente." };
+    },
+
+    systemMetrics() {
+      const h = this.systemInfo;
+      if (!h) return [];
+      const dbInfo = h.db || {};
+      const em = h.emails || {};
+      const ord = h.orders || {};
+      const num = n => (typeof n === "number" ? n.toLocaleString("es-CL") : "—");
+      return [
+        { id: "db", label: "Base de datos", value: dbInfo.ok ? "En línea" : "Con fallas", tone: dbInfo.ok ? "ok" : "bad" },
+        { id: "products", label: "Productos", value: num(dbInfo.products) },
+        { id: "users", label: "Usuarios activos", value: num(dbInfo.users) },
+        { id: "orders", label: "Órdenes", value: ord.err ? "—" : num(ord.total) },
+        { id: "carts", label: "Carritos", value: em.err ? "—" : num(em.carts) },
+      ];
+    },
+
+    // JSON para soporte, sin la ruta del archivo de la DB (infra interna).
+    // Se pinta con x-text, así que Alpine lo escapa como texto plano.
+    systemJson() {
+      if (!this.systemInfo) return "";
+      try {
+        const clone = JSON.parse(JSON.stringify(this.systemInfo));
+        if (clone.db) delete clone.db.path;
+        return JSON.stringify(clone, null, 2);
+      } catch { return ""; }
+    },
+
+    systemUpdatedLabel() {
+      const d = this.system.updatedAt;
+      if (!d) return "—";
+      return d.toLocaleString("es-CL", {
+        timeZone: "America/Santiago",
+        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+      });
     },
 
     async loadPaymentFee() {
