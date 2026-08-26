@@ -287,6 +287,12 @@ app.use(
       } else {
         res.setHeader("Cache-Control", "no-cache");
       }
+      // Los assets de los emails (logo, placeholder) los pide un cliente de
+      // correo o el proxy de Gmail, no nuestro propio origen: el default
+      // same-origin de helmet los bloquearía en un webmail.
+      if (/[\\/]assets[\\/]email[\\/]/.test(filePath)) {
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      }
     },
   })
 );

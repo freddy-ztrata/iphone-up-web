@@ -2,6 +2,7 @@
 //
 //   POST /api/cart/capture           guarda el carro + email del checkout
 //   GET  /api/cart/:token            restaura un carro desde el link del email
+//   GET  /api/emails/image           derivado PNG de una foto del catálogo
 //   GET  /api/emails/unsubscribe     baja (link firmado del footer)
 //   POST /api/emails/unsubscribe     baja en un clic (RFC 8058, botón de Gmail)
 //   POST /api/emails/webhook         eventos de Resend (firma Svix)
@@ -17,6 +18,7 @@ const carts = require("../lib/carts");
 const mailer = require("../lib/mailer");
 const settings = require("../lib/settings");
 const emailToken = require("../lib/email-token");
+const emailImages = require("../lib/email-images");
 const resendSignature = require("../lib/resend-signature");
 
 const router = express.Router();
@@ -28,6 +30,9 @@ const captureLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, standardHe
 const restoreLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 60, standardHeaders: false, legacyHeaders: false });
 const unsubLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: false, legacyHeaders: false });
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: false, legacyHeaders: false });
+// Las imágenes las pide el proxy del cliente de correo (Gmail baja todas las de
+// un email de una): límite alto, pero límite al fin — cada miss convierte.
+const imageLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: false, legacyHeaders: false });
 
 // =====================================================================
 // CAPTURA DEL CARRO
@@ -113,6 +118,62 @@ router.get("/cart/:token", restoreLimiter, (req, res) => {
     itemCount: cart.itemCount,
     subtotal: cart.subtotal,
   });
+});
+
+// =====================================================================
+// IMÁGENES DE LOS EMAILS
+// =====================================================================
+// GET /api/emails/image?src=assets/iphones/variants/14-pro.webp&s=136
+//
+// Devuelve un PNG cuadrado. Existe porque el catálogo es WebP y Outlook de
+// escritorio no lo soporta (ver server/lib/email-images.js para el detalle).
+//
+// Es público a propósito: quien abre el correo no tiene sesión, y Gmail ni
+// siquiera pide la imagen desde el navegador del cliente sino desde su proxy.
+// Por eso la defensa NO es la autenticación sino la whitelist de rutas:
+// `normalizeSource()` acepta cuatro carpetas conocidas y nada más — ni URLs de
+// otros dominios, ni traversal, ni esquemas raros.
+function sendImage(res, out) {
+  res.setHeader("Content-Type", "image/png");
+  // 30 días, igual que las imágenes del sitio en express.static. Sin
+  // `immutable`: la URL es la ruta del original, no un hash, así que si alguien
+  // reemplaza `assets/iphones/iphone-13.webp` en un deploy la revalidación por
+  // ETag tiene que poder correr. Los uploads del admin no tienen ese problema
+  // (cada uno estrena un nombre UUID).
+  res.setHeader("Cache-Control", "public, max-age=2592000");
+  // El default de helmet es same-origin, que rompería la carga directa desde un
+  // webmail. La imagen es pública y no lleva ningún dato del cliente.
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("ETag", out.etag);
+  res.sendFile(out.file);
+}
+
+router.get("/emails/image", imageLimiter, async (req, res) => {
+  const base = (process.env.PUBLIC_URL || "").replace(/\/+$/, "");
+  const rel = emailImages.normalizeSource(req.query.src, base);
+  const size = emailImages.pickSize(req.query.s);
+
+  // Fuera de la whitelist ⇒ 400 y nada más. Los templates nunca generan una
+  // URL así; si llegó una, alguien está probando el endpoint a mano.
+  if (!rel) return res.status(400).json({ error: "imagen no permitida" });
+
+  try {
+    let out = await emailImages.png(rel, size);
+    if (!out) {
+      // Ruta válida pero el archivo ya no está (foto borrada del admin).
+      // Mejor el placeholder que un ícono de imagen rota en la bandeja.
+      out = await emailImages.png(emailImages.PLACEHOLDER, size);
+      if (!out) return res.status(404).json({ error: "imagen no encontrada" });
+    }
+    if (req.headers["if-none-match"] === out.etag) {
+      res.setHeader("ETag", out.etag);
+      return res.status(304).end();
+    }
+    sendImage(res, out);
+  } catch (err) {
+    console.error("[emails/image]", err.message);
+    res.status(500).json({ error: "No se pudo generar la imagen" });
+  }
 });
 
 // =====================================================================

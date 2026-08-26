@@ -29,7 +29,8 @@ server/lib/catalog-extras.js → TESTIMONIALS, STATS, FAQS, TRADEIN_PRICES (aún
 server/lib/settings.js       → get/set de la tabla `settings` (config editable del admin: comisión medio de pago, emails)
 server/lib/resend.js         → Cliente HTTP de Resend (sin SDK). Dry-run si no hay API key
 server/lib/mailer.js         → ÚNICA puerta de salida de emails: settings → exclusiones → idempotencia → render → envío
-server/lib/email-templates.js→ Templates HTML + texto plano (todo dato externo pasa por esc())
+server/lib/email-templates.js→ Design system + templates HTML/texto (todo dato externo pasa por esc())
+server/lib/email-images.js   → Whitelist de rutas + derivados PNG cacheados de las fotos del catálogo
 server/lib/email-fixtures.js → Datos ficticios por template + whitelist de lo probable desde el admin
 server/lib/email-token.js    → HMAC de los links de baja (unsubscribe)
 server/lib/resend-signature.js → verify() de la firma Svix del webhook de Resend
@@ -46,7 +47,10 @@ server/lib/chilexpress.js    → Cliente API Chilexpress
 server/lib/shipping-fallback.js → Tarifas fijas por región cuando no hay API key
 admin.html / admin.css / admin.js → Single-page admin (Alpine.js 3)
 assets/vendor/alpine.min.js  → Alpine self-hosted (44 KB) — NO usar CDN (CSP lo bloquea)
+assets/email/                → PNG que usan los emails (logo + placeholder). NO WebP: Outlook no lo lee
 scripts/seed-from-datajs.js  → Migración inicial data.js → SQLite (corre al boot si DB vacía)
+scripts/build-email-assets.js→ `npm run build:email-assets` — regenera assets/email/*.png desde el logo
+scripts/preview-emails.js    → `npm run preview:emails` — vuelca los 8 templates a ./email-preview/
 scripts/create-user.js       → CLI: crear/resetear usuario admin
 scripts/verify-emails.js     → `npm run verify:emails` — libs de email/carritos en DB temporal + dry-run
 scripts/verify-http.js       → `npm run verify:http` — levanta el server real y golpea las rutas nuevas
@@ -80,6 +84,7 @@ En local default es `./data` (ver env `DATA_DIR`).
 | GET    | `/api/orders/:id`                          | Detalle de orden (sin datos sensibles)     |
 | POST   | `/api/cart/capture`                        | Guarda carro + email del checkout (precios re-resueltos contra la DB) |
 | GET    | `/api/cart/:token`                         | Restaura el carro desde el link del email (`?rc=`) |
+| GET    | `/api/emails/image?src=&s=`                | Derivado PNG de una foto para los emails. **Whitelist de rutas**, sin auth |
 | GET/POST | `/api/emails/unsubscribe`                | Baja con link firmado (GET = página, POST = one-click RFC 8058) |
 | POST   | `/api/emails/webhook`                      | Eventos de Resend con firma Svix (rebote duro ⇒ lista de exclusión) |
 | GET    | `/uploads/*`                               | Imágenes subidas desde admin (cache inmutable) |
@@ -131,11 +136,13 @@ CLI útil: `node scripts/create-user.js <email> <password> [name] [role]` para c
 **Verificaciones** (no hay test runner ni CI a propósito — son scripts con `node` pelado):
 
 ```bash
-npm run verify:emails   # libs de email/carritos: migración, templates+XSS, firmas, idempotencia, scheduler
-npm run verify:http     # levanta el server real en un puerto alto y golpea rutas, auth y webhook
+npm run verify:emails   # libs de email/carritos: migración, templates+XSS, diseño, imágenes, firmas, idempotencia, scheduler
+npm run verify:http     # levanta el server real en un puerto alto y golpea rutas, auth, imágenes y webhook
 ```
 
 Ambos usan un `DATA_DIR` temporal y fuerzan `RESEND_API_KEY=""` ⇒ **no tocan la DB real ni envían un solo correo**. Corrélos antes de pushear cualquier cambio del backend.
+
+Lo que cubren del lado de emails, además del render: que ninguna URL quede relativa, que ningún `<img>` apunte a un `.webp`, que el logo y el placeholder existan y sean PNG de verdad, que los botones lleven el fallback VML, que el HTML entre en el límite de Gmail, que la whitelist de `/api/emails/image` rechace traversal / dominios ajenos / archivos que no son fotos, y que un `item.img` malicioso caiga al placeholder en vez de inyectar un atributo.
 
 ## Deploy
 
@@ -251,6 +258,42 @@ When adding an image, replicate the existing prep + conversion, then check the W
 1. **Source prep (on the PNG)** — sources are scraped from `backonline.cl/cdn/shop/files/...` (full PDP shots) and `pngimg.com/uploads/iphone_11/` (iPhone 11 series). Two transforms: (a) **white-background removal** — corner flood-fill alpha=0 through near-white pixels (`R≥235 AND G≥235 AND B≥235`) + 0.7px Gaussian blur on alpha; (b) **trim to content bbox** with ~2% padding, so every variant fills its `object-fit: contain` box equally (without it, padded variants render visually smaller).
 2. **WebP conversion** — `sharp(png).webp({ quality: 82, alphaQuality: 100, effort: 6 })`, then delete the source PNG. Typical result is −90%+ (the full catalog went 8.2 MB → 0.58 MB). `sharp` is **not** a project dependency: install it ad-hoc with `npm install sharp --no-save` for the one-off so it never lands in `package.json` / the Docker build.
 
+## Emails: diseño y convenciones
+
+Los 8 templates de `server/lib/email-templates.js` usan la **misma identidad Dark Neon Premium que el sitio**: fondo negro, tarjeta `#0B0B0B`, acento lima `#A4E83A`, logo real. Antes eran claros/genéricos; el rediseño es de punta a punta.
+
+**El HTML de un email no es el HTML de una página.** Reglas que hay que respetar al tocar cualquier template:
+
+- **Layout con `<table>`**, ancho fijo 600px. Outlook renderiza con el motor de Word: no hay flex, ni grid, ni `position`.
+- **Colores sólidos y duplicados**: `bgcolor="#0B0B0B"` como atributo HTML *además* del `style` inline. Outlook ignora `background` en CSS de `<td>`. Nada de degradados de fondo, `rgba()` ni sombras.
+- **Todo lo estructural va inline.** El `<style>` del `<head>` solo lleva mejoras progresivas (media queries, overrides de modo oscuro). Un cliente que lo descarte tiene que seguir viendo el email completo.
+- **`mso-line-height-rule:exactly`** en cada bloque de texto, o Outlook se come el `line-height`.
+- **Botones con fallback VML** (`<v:roundrect>` dentro de `<!--[if mso]>`). El `<a>` con padding y `border-radius` no funciona en Outlook de escritorio. Lo hace `button()`, no lo escribas a mano.
+- **`<meta name="color-scheme" content="dark">`** + los overrides `[data-ogsc]`/`[data-ogsb]`: el email ya es oscuro y esos selectores evitan que Gmail/Outlook.com lo re-inviertan.
+- **Menos de ~100 KB de HTML.** Gmail recorta arriba de 102 KB y muestra "ver mensaje completo". Hoy el más grande son ~20 KB; `verify:emails` lo chequea.
+- **Componentes, no markup suelto**: `layout()`, `chip()`, `button()`, `productCards()`, `totalsBlock()`, `infoBox()`, `dataList()`, `trackingBox()`, `divider()`, `paragraph()`, `note()`. Si necesitás algo nuevo, agregá un componente.
+- **Texto plano siempre.** Un email sin alternativa de texto puntúa peor en los filtros de spam.
+
+**Imágenes (esto es lo menos obvio).** Outlook de escritorio **no soporta WebP** y todo el catálogo es WebP, así que ningún `<img>` de un email puede apuntar a un `.webp`:
+
+- Las fotos de producto salen por **`GET /api/emails/image?src=…&s=…`** (`server/lib/email-images.js`), que convierte a PNG cuadrado con `sharp` y cachea el derivado en `{DATA_DIR}/cache/email-images/`. La clave de cache incluye el mtime del original ⇒ si el admin resube la foto, el derivado se regenera solo.
+- Ese endpoint es **público y sin sesión** (lo abre el proxy de Gmail). Su defensa es una **whitelist**: cuatro carpetas (`assets/iphones/`, `assets/iphones/variants/`, `assets/email/`, `uploads/products/`), solo extensiones de imagen, nombre de archivo que no arranque con punto. Descarta traversal, backslash, `javascript:`/`data:`/`file:`, protocol-relative y cualquier host que no sea `PUBLIC_URL`. **No relajes `normalizeSource()`** sin agregar los asserts correspondientes.
+- Si la fuente no pasa la whitelist o el archivo no existe, se cae al **placeholder** (`assets/email/product-placeholder.png`), nunca a un `<img>` roto.
+- El logo (`assets/email/logo.png`) va directo por `express.static`. Los assets de `assets/email/` se sirven con `Cross-Origin-Resource-Policy: cross-origin` porque el default `same-origin` de helmet los bloquearía en un webmail.
+- **Todas las URLs de un email son absolutas** y salen de `PUBLIC_URL`. Sin `PUBLIC_URL` no hay imágenes (una ruta relativa dentro de un correo no significa nada).
+- Para regenerar los PNG después de cambiar el logo: `npm run build:email-assets`.
+
+**Contacto en los emails: solo Instagram** (`@iphoneup.cl`). Los emails no llevan WhatsApp aunque el sitio sí lo tenga.
+
+**Para verlo antes de mandarlo:**
+
+```bash
+npm run preview:emails                                   # → ./email-preview/index.html (gitignored)
+PUBLIC_URL=http://localhost:8080 npm run preview:emails  # con el server arriba, para ver las fotos
+```
+
+Y desde el panel: Ajustes → Emails → botón de prueba por template (asunto marcado `[PRUEBA]`, datos ficticios).
+
 ## CSS architecture
 
 Single ~1500-line `styles.css`. Conventions:
@@ -317,7 +360,8 @@ The store map is an `<iframe>` of OpenStreetMap (no API key, no tracking) tinted
 - **Don't commit `.env`** — está en `.gitignore`. Las credenciales reales viven solo en Dokploy.
 - **Don't add tests, lint configs, or CI** — there's no test runner and adding one would force a build dependency.
 - **Address text appears in several places**: meta description, store card title + sub, footer link, Google Maps deep-link href, and the `Store` JSON-LD (`streetAddress`) in `index.html`. Keep them in sync.
-- **WhatsApp SÍ está en el sitio hoy** (`+56 9 8326 5824`): botón flotante en index/product/checkout, CTA en la ficha de producto, link en el footer, deep-link del formulario de recompra en `app.js` y `telephone` en el `Store` JSON-LD de `index.html`. La regla vieja de "solo Instagram / sin teléfono" quedó obsoleta cuando llegó el número real. Si hay que cambiarlo, **son 7 lugares** — grepeá `wa.me` y `telephone` y actualizalos todos juntos.
+- **Los emails no son una página web.** Antes de tocar `email-templates.js` leé la sección **Emails: diseño y convenciones**. Lo que más rompe sin avisar: un `<img>` apuntando a un `.webp` (Outlook lo muestra roto), una URL relativa (no carga en ninguna bandeja), un botón sin fallback VML y relajar la whitelist de `server/lib/email-images.js` — ese endpoint es público y sin sesión. `npm run verify:emails` + `npm run verify:http` chequean las cuatro cosas.
+- **WhatsApp SÍ está en el sitio hoy** (`+56 9 8326 5824`): botón flotante en index/product/checkout, CTA en la ficha de producto, link en el footer, deep-link del formulario de recompra en `app.js` y `telephone` en el `Store` JSON-LD de `index.html`. La regla vieja de "solo Instagram / sin teléfono" quedó obsoleta cuando llegó el número real. Si hay que cambiarlo, **son 7 lugares** — grepeá `wa.me` y `telephone` y actualizalos todos juntos. **Los emails son la excepción: van solo con Instagram** (decisión del cliente, no un olvido — no le agregues WhatsApp a `email-templates.js`).
 - **Si tocas el backend, valida con `/api/health`** antes de pushear — confirma que las env vars y las dependencias estén OK.
 - **No agregar dependencias npm pesadas** — el Dockerfile hace `npm install --omit=dev` cada build. Cada paquete extra es tiempo de deploy. Hoy: `express`, `dotenv`, `mercadopago`, `helmet`, `express-session` + `better-sqlite3(-session-store)`, `bcryptjs`, `multer`, `express-rate-limit`, `cookie-parser` y **`sharp`** (dependencia real: la usa `server/routes/admin/uploads.js` para convertir a WebP en runtime — no la saques). Para conversiones de imágenes **one-shot fuera del server** (preparar assets del repo) seguí usando `npm install sharp --no-save`.
 - **MP webhook responde 200 inmediato** (`server/routes/mercadopago.js`) y procesa después — si el procesamiento lanza, MP no reintenta. Si agregas lógica crítica en el webhook (emails, etc.), considera reintentos o cola.

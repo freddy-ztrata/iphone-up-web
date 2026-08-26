@@ -9,6 +9,8 @@
     "dev": "node server/index.js",
     "create-user": "node scripts/create-user.js",
     "seed": "node scripts/seed-from-datajs.js",
+    "build:email-assets": "node scripts/build-email-assets.js",
+    "preview:emails": "node scripts/preview-emails.js",
     "verify:emails": "node scripts/verify-emails.js",
     "verify:http": "node scripts/verify-http.js"
   },

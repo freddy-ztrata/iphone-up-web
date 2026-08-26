@@ -33,6 +33,7 @@ const { seedIfEmpty } = require("./seed-from-datajs");
 
 const settings = require("../server/lib/settings");
 const templates = require("../server/lib/email-templates");
+const emailImages = require("../server/lib/email-images");
 const emailToken = require("../server/lib/email-token");
 const resendSignature = require("../server/lib/resend-signature");
 const resend = require("../server/lib/resend");
@@ -105,9 +106,32 @@ function sampleOrder(v) {
     total: v.price + 3990,
     buyer: { name: XSS, email: "cliente@ejemplo.cl", phone: "+56 9 1111 1111", rut: "11.111.111-1" },
     shipping: { method: "shipping", cost: 3990, address: { street: "Calle " + XSS, number: "1", county: "Providencia", region: "RM" } },
-    items: [{ model: v.model, storage: v.storage, color: v.color || "", price: v.price, sealed: false, phoneId: v.product_id, qty: 1 }],
+    // `img` con una ruta real del repo: sin foto los chequeos de diseño no
+    // ejercerían el endpoint de imágenes (caerían al placeholder y pasarían).
+    items: [{
+      model: v.model, storage: v.storage, color: v.color || "", price: v.price,
+      sealed: false, phoneId: v.product_id, qty: 1,
+      img: "assets/iphones/variants/14-pro.webp",
+    }],
     tracking_code: "CX" + XSS,
     tracking_carrier: "Chilexpress",
+  };
+}
+
+/**
+ * La misma orden pero sin el payload XSS en los datos del comprador.
+ * Los chequeos de DISEÑO tienen que correr sobre datos limpios: si el nombre
+ * del cliente es `<img src=x onerror=…>`, su versión escapada (`onerror=&quot;`)
+ * aparece en el HTML y su versión cruda en el texto plano — ambas correctas,
+ * pero indistinguibles de una inyección real para un assert por substring.
+ */
+function cleanOrder(v) {
+  const o = sampleOrder(v);
+  return {
+    ...o,
+    buyer: { ...o.buyer, name: "Camila Rojas" },
+    shipping: { ...o.shipping, address: { ...o.shipping.address, street: "Av. Providencia" } },
+    tracking_code: "CX123456789CL",
   };
 }
 
@@ -263,6 +287,232 @@ async function main() {
   check("el tracking del admin también se escapa", () => {
     const r = templates.render("order_shipped", ctx);
     assert(!r.html.includes("<img src=x"), "el tracking entró crudo");
+  });
+
+  // ==========================================================
+  section("Diseño: identidad iPhone UP en el HTML");
+  // ==========================================================
+  // Estos chequeos no juzgan si el email es lindo. Cuidan las cosas que, si se
+  // rompen, hacen que el correo llegue mal a la bandeja y nadie se entere:
+  // imágenes relativas (no cargan), WebP crudo (Outlook lo muestra roto),
+  // botones sin fallback VML, o un HTML tan grande que Gmail lo recorta.
+
+  const clean = cleanOrder(variant);
+  const cleanCtx = {
+    ...ctx,
+    order: clean,
+    cart: { name: "Camila", items: clean.items, subtotal: clean.subtotal },
+    coupon: "PROMO10",
+  };
+  const RENDERED = Object.fromEntries(
+    templates.TEMPLATE_IDS.map(id => [id, templates.render(id, cleanCtx)])
+  );
+
+  check("todos los emails traen el logo real en PNG", () => {
+    for (const [id, r] of Object.entries(RENDERED)) {
+      assert(
+        r.html.includes('src="https://iphoneup.cl/assets/email/logo.png"'),
+        `${id}: falta el logo absoluto del header`
+      );
+    }
+  });
+
+  check("el logo y el placeholder existen en el repo", () => {
+    for (const rel of [emailImages.LOGO, emailImages.PLACEHOLDER]) {
+      const abs = emailImages.resolveFile(rel);
+      assert(abs, `falta ${rel} — correr 'npm run build:email-assets'`);
+      // Firma PNG: los emails no pueden referenciar WebP (Outlook no lo lee).
+      const head = fs.readFileSync(abs).subarray(0, 8);
+      assertEq(head.toString("hex"), "89504e470d0a1a0a", `${rel} no es un PNG:`);
+    }
+  });
+
+  check("ninguna imagen ni link queda relativo", () => {
+    for (const [id, r] of Object.entries(RENDERED)) {
+      for (const m of r.html.matchAll(/\ssrc="([^"]*)"/g)) {
+        assert(/^https?:\/\//i.test(m[1]), `${id}: src relativo → ${m[1]}`);
+      }
+      for (const m of r.html.matchAll(/\shref="([^"]*)"/g)) {
+        assert(/^https?:\/\//i.test(m[1]), `${id}: href relativo → ${m[1]}`);
+      }
+    }
+  });
+
+  check("ningún <img> apunta directo a un .webp", () => {
+    // El WebP tiene que pasar por /api/emails/image, que devuelve PNG. Un
+    // src="…/foo.webp" se ve como un cuadro roto en Outlook de escritorio.
+    for (const [id, r] of Object.entries(RENDERED)) {
+      for (const m of r.html.matchAll(/\ssrc="([^"]*)"/g)) {
+        assert(!/\.webp(\?|$)/i.test(m[1]), `${id}: WebP servido crudo → ${m[1]}`);
+      }
+    }
+  });
+
+  check("las fotos de producto salen por el endpoint whitelisted", () => {
+    const r = RENDERED.order_paid;
+    assert(
+      r.html.includes("https://iphoneup.cl/api/emails/image?src="),
+      "las fotos no pasan por /api/emails/image"
+    );
+  });
+
+  check("los botones llevan fallback VML para Outlook", () => {
+    for (const id of ["order_paid", "order_shipped", "cart_reminder_1h", "internal_new_order"]) {
+      assert(RENDERED[id].html.includes("<!--[if mso]>"), `${id}: sin bloque condicional MSO`);
+      assert(RENDERED[id].html.includes("v:roundrect"), `${id}: el botón no tiene fallback VML`);
+    }
+  });
+
+  check("el layout declara modo oscuro y pinta el fondo con bgcolor", () => {
+    for (const [id, r] of Object.entries(RENDERED)) {
+      assert(/<meta name="color-scheme" content="dark">/.test(r.html), `${id}: sin meta color-scheme`);
+      assert(r.html.includes('bgcolor="#000000"'), `${id}: el fondo negro no está como atributo bgcolor`);
+      assert(r.html.includes(templates.ACCENT), `${id}: no aparece el acento lima`);
+      assert(/<table role="presentation"/.test(r.html), `${id}: el layout no usa tablas`);
+    }
+  });
+
+  check("cada email tiene preheader y cabe sin que Gmail lo recorte", () => {
+    for (const [id, r] of Object.entries(RENDERED)) {
+      assert(/display:none;max-height:0/.test(r.html), `${id}: sin preheader oculto`);
+      const kb = Buffer.byteLength(r.html, "utf8") / 1024;
+      // Gmail corta alrededor de los 102 KB y muestra "ver mensaje completo".
+      assert(kb < 100, `${id}: ${kb.toFixed(1)} KB — Gmail lo recortaría`);
+    }
+  });
+
+  check("el texto plano sigue siendo texto plano", () => {
+    for (const [id, r] of Object.entries(RENDERED)) {
+      assert(r.text.length > 40, `${id}: texto plano demasiado corto`);
+      assert(!/<(table|div|img|html)\b/i.test(r.text), `${id}: se coló HTML en la versión de texto`);
+    }
+  });
+
+  // ==========================================================
+  section("Imágenes de email: whitelist y derivados");
+  // ==========================================================
+  const ORIGIN = "https://iphoneup.cl";
+
+  check("acepta las rutas reales del catálogo y de los uploads", () => {
+    const ok = [
+      "assets/iphones/iphone-13.webp",
+      "assets/iphones/variants/14-pro.webp",
+      "assets/email/logo.png",
+      "/uploads/products/abc123.webp",
+      "./assets/iphones/iphone-11.webp",
+      `${ORIGIN}/assets/iphones/variants/14-pro.webp`,
+    ];
+    for (const raw of ok) {
+      assert(emailImages.normalizeSource(raw, ORIGIN), `rechazó una ruta válida: ${raw}`);
+    }
+  });
+
+  check("rechaza traversal, esquemas raros y dominios ajenos", () => {
+    const bad = [
+      "../../server/db.js",
+      "assets/../server/db.js",
+      "assets/iphones/../../.env",
+      "uploads/products/../../iphoneup.db",
+      "/etc/passwd",
+      "..\\..\\windows\\system32",
+      "assets\\iphones\\14-pro.webp",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "vbscript:msgbox(1)",
+      "file:///etc/passwd",
+      "//evil.example/x.png",
+      "https://evil.example/x.png",
+      "https://iphoneup.cl.evil.example/assets/iphones/iphone-13.webp",
+      "http://iphoneup.cl@evil.example/x.png",
+      // Whitelist por carpeta: no todo lo que está en assets/ es una foto.
+      "assets/vendor/alpine.min.js",
+      "assets/fonts/inter-latin.woff2",
+      "assets/iphones/iphone-13.js",
+      "uploads/products/shell.php",
+      // Ocultos y nombres que arrancan con punto.
+      "assets/iphones/.env.webp",
+      "",
+      null,
+      undefined,
+    ];
+    for (const raw of bad) {
+      assertEq(emailImages.normalizeSource(raw, ORIGIN), null, `aceptó ${JSON.stringify(raw)}:`);
+    }
+  });
+
+  check("resolveFile no sale de su carpeta base", () => {
+    assert(emailImages.resolveFile("assets/iphones/variants/14-pro.webp"), "no encontró una foto real");
+    assertEq(emailImages.resolveFile("assets/iphones/no-existe-jamas.webp"), null, "archivo inexistente:");
+    assertEq(emailImages.resolveFile("../../etc/passwd"), null, "traversal:");
+    assertEq(emailImages.resolveFile("server/db.js"), null, "fuera de la whitelist:");
+  });
+
+  check("el tamaño del derivado se acota a la whitelist", () => {
+    assertEq(emailImages.pickSize("136"), 136);
+    assertEq(emailImages.pickSize("99999"), emailImages.DEFAULT_SIZE, "un tamaño enorme debería caer al default");
+    assertEq(emailImages.pickSize("-1"), emailImages.DEFAULT_SIZE);
+    assertEq(emailImages.pickSize("abc"), emailImages.DEFAULT_SIZE);
+    assertEq(emailImages.pickSize(null), emailImages.DEFAULT_SIZE);
+  });
+
+  await checkAsync("el derivado es un PNG de verdad y queda cacheado", async () => {
+    const first = await emailImages.png("assets/iphones/variants/14-pro.webp", 136);
+    assert(first, "no generó el derivado");
+    assertEq(first.cached, false, "la primera vez no debería venir de cache");
+    const head = fs.readFileSync(first.file).subarray(0, 8);
+    assertEq(head.toString("hex"), "89504e470d0a1a0a", "el derivado no arranca con la firma PNG:");
+    const again = await emailImages.png("assets/iphones/variants/14-pro.webp", 136);
+    assertEq(again.cached, true, "la segunda vez debería salir de la cache");
+    assertEq(again.etag, first.etag, "el ETag debería ser estable");
+  });
+
+  await checkAsync("una ruta fuera de la whitelist no genera nada", async () => {
+    assertEq(await emailImages.png("../../server/db.js", 136), null);
+    assertEq(await emailImages.png("assets/iphones/no-existe.webp", 136), null);
+  });
+
+  check("imageUrl cae al placeholder en vez de dejar un <img> roto", () => {
+    const ph = emailImages.placeholderUrl(ORIGIN);
+    assertEq(emailImages.imageUrl("https://evil.example/x.png", { base: ORIGIN }), ph);
+    assertEq(emailImages.imageUrl("javascript:alert(1)", { base: ORIGIN }), ph);
+    assertEq(emailImages.imageUrl("", { base: ORIGIN }), ph);
+    assertEq(emailImages.imageUrl(null, { base: ORIGIN }), ph);
+    assertEq(emailImages.imageUrl("../../.env", { base: ORIGIN }), ph);
+    assert(
+      emailImages.imageUrl("assets/iphones/variants/14-pro.webp", { base: ORIGIN })
+        .startsWith(`${ORIGIN}/api/emails/image?src=`),
+      "una ruta válida debería salir por el endpoint"
+    );
+    // Sin PUBLIC_URL no hay URL absoluta posible: mejor vacío que relativa.
+    assertEq(emailImages.imageUrl("assets/iphones/iphone-13.webp", { base: "" }), "");
+  });
+
+  check("un item.img malicioso no inyecta atributos en el <img>", () => {
+    const payloads = [
+      '" onerror="alert(1)',
+      "' onerror='alert(1)",
+      'x" onload="alert(1)',
+      "javascript:alert(1)",
+      '"><script>alert(1)</script>',
+      "https://evil.example/pixel.png",
+      "../../.env",
+    ];
+    for (const img of payloads) {
+      // Orden limpia: lo único sucio de este render es `img`, así que cualquier
+      // "onerror" que aparezca vino de ahí y no del nombre del comprador.
+      const html = templates.render("order_paid", {
+        ...cleanCtx,
+        order: { ...clean, items: [{ ...clean.items[0], img }] },
+      }).html;
+      assert(!/onerror\s*=/i.test(html), `sobrevivió un onerror con img=${JSON.stringify(img)}`);
+      assert(!/onload\s*=/i.test(html), `sobrevivió un onload con img=${JSON.stringify(img)}`);
+      assert(!/<script/i.test(html), `entró un <script> con img=${JSON.stringify(img)}`);
+      assert(!html.includes("evil.example"), `embebió un dominio ajeno con img=${JSON.stringify(img)}`);
+      assert(
+        html.includes("/assets/email/product-placeholder.png"),
+        `no cayó al placeholder con img=${JSON.stringify(img)}`
+      );
+    }
   });
 
   // ==========================================================
@@ -722,6 +972,25 @@ async function main() {
       }
       assert(!/\$0\b/.test(r.text), `${t.id}: aparece un total en cero`);
     }
+  });
+
+  check("las fotos de los fixtures existen de verdad en el repo", () => {
+    // Una ruta inventada acá no rompe nada visible: el email de prueba sale con
+    // el placeholder y parece que el diseño está mal. Ya pasó — los archivos de
+    // `variants/` no llevan el prefijo "iphone-".
+    const seen = new Set();
+    for (const t of fixtures.list()) {
+      const data = fixtures.build(t.id, { config: settings.getEmailConfig() });
+      const items = data.order?.items || data.cart?.items || [];
+      for (const it of items) {
+        if (!it.img || seen.has(it.img)) continue;
+        seen.add(it.img);
+        const rel = emailImages.normalizeSource(it.img, "https://iphoneup.cl");
+        assert(rel, `${t.id}: la ruta ${it.img} no pasa la whitelist`);
+        assert(emailImages.resolveFile(rel), `${t.id}: no existe el archivo ${it.img}`);
+      }
+    }
+    assert(seen.size >= 2, "los fixtures deberían ejercer al menos dos fotos distintas");
   });
 
   check("los datos del fixture se identifican como prueba", () => {

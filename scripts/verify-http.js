@@ -69,6 +69,14 @@ async function req(method, url, { body, headers = {}, auth = false, raw = false 
   return { status: res.status, text, json, headers: res.headers };
 }
 
+// Variante binaria: `res.text()` destruye un PNG (lo decodifica como UTF-8), y
+// las imágenes de los emails hay que mirarlas byte a byte para saber si son un
+// PNG de verdad o el JSON de un error.
+async function reqBuf(url, headers = {}) {
+  const res = await fetch(BASE + url, { headers });
+  return { status: res.status, buf: Buffer.from(await res.arrayBuffer()), headers: res.headers };
+}
+
 // ---------------------------------------------------------------- boot
 require("../server/index.js");
 
@@ -189,6 +197,103 @@ async function main() {
   await check("un token inexistente o mal formado da 404", async () => {
     assertEq((await req("GET", "/api/cart/" + "f".repeat(32))).status, 404);
     assertEq((await req("GET", "/api/cart/no-es-un-token")).status, 404);
+  });
+
+  // ==========================================================
+  section("Imágenes de los emails");
+  // ==========================================================
+  // El endpoint es PÚBLICO (lo abre el proxy de Gmail, sin sesión) y recibe la
+  // ruta por query string: acá se verifica que la whitelist esté puesta de
+  // verdad y no solo en la lib.
+  const PNG_MAGIC = "89504e470d0a1a0a";
+
+  await check("una foto real del catálogo vuelve como PNG", async () => {
+    const r = await reqBuf("/api/emails/image?src=assets%2Fiphones%2Fvariants%2F14-pro.webp&s=136");
+    assertEq(r.status, 200);
+    assertEq(r.headers.get("content-type"), "image/png");
+    assertEq(r.buf.subarray(0, 8).toString("hex"), PNG_MAGIC, "no arranca con la firma PNG:");
+    assert(r.buf.length > 500, "el PNG salió sospechosamente chico: " + r.buf.length);
+    assert(/max-age=\d{5,}/.test(r.headers.get("cache-control") || ""), "sin cache larga");
+    assertEq(r.headers.get("cross-origin-resource-policy"), "cross-origin", "CORP:");
+  });
+
+  await check("el ETag ahorra la segunda descarga", async () => {
+    const first = await reqBuf("/api/emails/image?src=assets%2Fiphones%2Fvariants%2F14-pro.webp&s=136");
+    const etag = first.headers.get("etag");
+    assert(etag, "no mandó ETag");
+    const second = await reqBuf("/api/emails/image?src=assets%2Fiphones%2Fvariants%2F14-pro.webp&s=136", {
+      "If-None-Match": etag,
+    });
+    assertEq(second.status, 304, "debería contestar 304");
+  });
+
+  await check("traversal, dominios ajenos y archivos que no son fotos dan 400", async () => {
+    const bad = [
+      "../../server/db.js",
+      "assets/../server/db.js",
+      "assets/iphones/../../.env",
+      "/etc/passwd",
+      "..%2f..%2fserver%2fdb.js",
+      "%2e%2e%2f%2e%2e%2fserver%2fdb.js",
+      "https://evil.example/x.png",
+      "//evil.example/x.png",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "assets/vendor/alpine.min.js",
+      "assets/fonts/inter-latin.woff2",
+      "uploads/products/shell.php",
+      "",
+    ];
+    for (const src of bad) {
+      const r = await reqBuf(`/api/emails/image?src=${encodeURIComponent(src)}&s=136`);
+      assertEq(r.status, 400, `debería rechazar ${JSON.stringify(src)}:`);
+    }
+  });
+
+  await check("una ruta permitida pero sin archivo cae al placeholder", async () => {
+    const r = await reqBuf("/api/emails/image?src=uploads%2Fproducts%2Fborrada0000.webp&s=136");
+    assertEq(r.status, 200, "debería servir el placeholder, no un error");
+    assertEq(r.buf.subarray(0, 8).toString("hex"), PNG_MAGIC);
+  });
+
+  await check("un tamaño fuera de la whitelist cae al default en vez de fallar", async () => {
+    for (const s of ["99999", "-1", "abc", ""]) {
+      const r = await reqBuf(`/api/emails/image?src=assets%2Fiphones%2Fiphone-13.webp&s=${encodeURIComponent(s)}`);
+      assertEq(r.status, 200, `s=${JSON.stringify(s)}:`);
+      assertEq(r.buf.subarray(0, 8).toString("hex"), PNG_MAGIC);
+    }
+  });
+
+  await check("el logo del header se sirve y es un PNG", async () => {
+    const r = await reqBuf("/assets/email/logo.png");
+    assertEq(r.status, 200);
+    assertEq(r.headers.get("content-type"), "image/png");
+    assertEq(r.buf.subarray(0, 8).toString("hex"), PNG_MAGIC);
+    // Sin esto un webmail que baje la imagen directo se la come el CORP de helmet.
+    assertEq(r.headers.get("cross-origin-resource-policy"), "cross-origin", "CORP:");
+  });
+
+  await check("el email renderizado apunta a URLs absolutas que este server sirve", async () => {
+    // Cierra el círculo: se renderiza el email como saldría a producción y se
+    // pide CADA imagen contra el server real. Una ruta mal escrita en un fixture
+    // (pasó con `variants/iphone-14-pro.webp`) falla acá y no en la bandeja
+    // del cliente.
+    const rendered = require("../server/lib/email-templates").render("order_paid", {
+      ...require("../server/lib/email-fixtures").build("order_paid", {}),
+      publicUrl: BASE,
+    });
+    assert(rendered.html.includes(`${BASE}/assets/email/logo.png`), "el logo no es absoluto");
+    assert(rendered.html.includes(`${BASE}/api/emails/image?src=`), "las fotos no pasan por el endpoint");
+    for (const m of rendered.html.matchAll(/\ssrc="([^"]*)"/g)) {
+      assert(/^https?:\/\//i.test(m[1]), "src relativo en el email: " + m[1]);
+    }
+    // Y todo lo que referencia tiene que responder de verdad.
+    for (const m of rendered.html.matchAll(/\ssrc="([^"]*)"/g)) {
+      const url = m[1].replace(/&amp;/g, "&");
+      const img = await reqBuf(url.slice(BASE.length));
+      assertEq(img.status, 200, `no carga ${url}:`);
+      assertEq(img.buf.subarray(0, 8).toString("hex"), PNG_MAGIC, `${url} no es PNG:`);
+    }
   });
 
   // ==========================================================

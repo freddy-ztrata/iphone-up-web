@@ -37,17 +37,24 @@ const BUYER = {
 };
 
 // Mismo shape que el carro real: {model, storage, color, price, sealed, phoneId, img}.
+//
+// Las rutas de `img` tienen que EXISTIR en el repo: son las mismas que sirve
+// /api/emails/image y una ruta inventada haría que la prueba muestre el
+// placeholder — justo lo contrario de lo que se quiere ver al probar el diseño.
+// Ojo con el naming: los archivos de `variants/` NO llevan el prefijo "iphone-"
+// (es `14-pro.webp`, no `iphone-14-pro.webp`) y los modelos base viven un nivel
+// más arriba, en `assets/iphones/`. `npm run verify:emails` lo chequea.
 function fakeItems() {
   return [
     {
       model: "iPhone 14 Pro", storage: "256GB", color: "Morado Oscuro",
       price: 700000, sealed: false, phoneId: 14, qty: 1,
-      img: "assets/iphones/variants/iphone-14-pro.webp",
+      img: "assets/iphones/variants/14-pro.webp",
     },
     {
       model: "iPhone 13", storage: "128GB", color: "Medianoche",
       price: 400000, sealed: false, phoneId: 13, qty: 1,
-      img: "assets/iphones/variants/iphone-13.webp",
+      img: "assets/iphones/iphone-13.webp",
     },
   ];
 }
