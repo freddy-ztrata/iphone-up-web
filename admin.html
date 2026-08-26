@@ -726,14 +726,40 @@
                   <span>Reply-To <em x-show="emails.pending?.replyTo">— sin definir</em></span>
                   <input type="email" x-model="emails.config.replyTo" placeholder="vacío = responder al remitente" />
                 </div>
-                <div class="ac-edit-field">
+                <!-- Chips: el aviso interno admite varios destinatarios. La fuente
+                     de verdad es `internalTo.list` (no `emails.config.internalTo`,
+                     que el backend sigue devolviendo como string legible). -->
+                <div class="ac-edit-field ac-chips-field">
                   <span>Aviso interno de ventas <em x-show="emails.pending?.internalTo">— desactivado</em></span>
-                  <input type="email" x-model="emails.config.internalTo" placeholder="vacío = no enviar avisos internos" />
+                  <div class="ac-chips" :class="internalTo.error && 'has-error'"
+                       @click="$refs.internalToInput?.focus()">
+                    <template x-for="(mail, i) in internalTo.list" :key="mail">
+                      <span class="ac-chip">
+                        <span class="ac-chip-text" x-text="mail"></span>
+                        <button type="button" class="ac-chip-x" @click.stop="removeInternalTo(i)"
+                                :aria-label="'Quitar ' + mail" :title="'Quitar ' + mail">&times;</button>
+                      </span>
+                    </template>
+                    <input type="text" inputmode="email" autocomplete="off" class="ac-chips-input"
+                           x-ref="internalToInput"
+                           x-model="internalTo.draft"
+                           :placeholder="internalTo.list.length ? 'Agregar otro…' : 'vacío = no enviar avisos internos'"
+                           aria-label="Agregar destinatario del aviso interno"
+                           @input="onInternalToInput()"
+                           @keydown.enter.prevent="commitInternalTo()"
+                           @keydown.backspace="onInternalToBackspace($event)"
+                           @blur="commitInternalTo()" />
+                  </div>
+                  <p class="ac-chips-error" x-show="internalTo.error" x-text="internalTo.error"></p>
+                  <p class="ac-chips-count" x-show="internalTo.list.length"
+                     x-text="internalTo.list.length + ' de ' + internalTo.max + ' destinatarios'"></p>
                 </div>
               </div>
               <p class="ac-edit-hint">
                 El dominio del remitente tiene que estar verificado en Resend. Reply-To y aviso interno
                 pueden quedar vacíos: vacío significa "omitir", no se usa ningún placeholder.
+                El aviso interno acepta varios correos: confirmá cada uno con Enter o una coma
+                (hasta <span x-text="internalTo.max"></span>).
               </p>
               <div class="ac-setting-actions">
                 <button class="ac-btn-primary" @click="saveEmails()" :disabled="emails.saving"
