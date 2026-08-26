@@ -810,8 +810,96 @@
 .ac-media-drop { aspect-ratio: 1; border: 1.5px dashed var(--border-strong); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; line-height: 1.3; color: var(--text-mute); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .ac-media-drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft-bg); }
 
-/* ===== Dropdown propio (sin <select> nativo) + tema oscuro de controles ===== */
+/* ===== Tema oscuro de controles nativos + dropdown propio =====
+   Los <select> del admin se ven en tres capas, de menos a más capaz:
+   1. color-scheme: dark  → el navegador dibuja el menú nativo en oscuro.
+   2. option/optgroup con fondo y color explícitos → contraste aunque el
+      menú nativo se pinte claro (Chrome/macOS ignora buena parte del CSS
+      del popup, pero sí aplica el color de fondo del ítem detrás del texto).
+   3. appearance: base-select (Chrome 135+) → el popup pasa a ser DOM real
+      y queda 100% tematizado. Va dentro de @supports, así que los
+      navegadores que no lo soportan se quedan en las capas 1 y 2.
+   Ojo con la cascada: las reglas de arriba (.ac-field/.ac-drawer-body/
+   .ac-edit-body select) usan el atajo `background`, que borra el
+   background-image. Por eso el caret se re-declara en cada estado. */
+:root {
+  color-scheme: dark;
+  --ac-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M6 8 0 0h12z' fill='%236b6b6b'/%3E%3C/svg%3E");
+}
 .ac-body { color-scheme: dark; }
+
+.ac-body select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--surface-2);
+  background-image: var(--ac-caret);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 7px;
+  color: var(--text);
+  font-family: inherit;
+  padding-right: 32px;
+  cursor: pointer;
+}
+.ac-body select:hover { border-color: var(--border-strong); }
+.ac-body select:focus, .ac-body select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background-color: var(--accent-soft-bg);
+  background-image: var(--ac-caret);
+  box-shadow: 0 0 0 3px rgba(164,232,58,0.16);
+}
+.ac-body select:disabled { opacity: .5; cursor: not-allowed; }
+.ac-body select option, .ac-body select optgroup {
+  background-color: var(--surface-3);
+  color: var(--text);
+}
+.ac-body select option:checked {
+  background-color: rgba(164,232,58,0.16);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@supports (appearance: base-select) {
+  /* Reglas separadas a propósito: si un motor no entiende ::picker(select),
+     solo se descarta esa regla y no la del <select>. */
+  .ac-body select {
+    appearance: base-select;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background-image: none;
+    padding-right: 12px;
+    text-align: left;
+  }
+  .ac-body select:focus, .ac-body select:focus-visible { background-image: none; }
+  .ac-body select::picker-icon { color: var(--text-mute); transition: transform .18s; }
+  .ac-body select:open::picker-icon { transform: rotate(180deg); }
+  .ac-body select:open { border-color: var(--accent); background-color: var(--accent-soft-bg); }
+  .ac-body select::picker(select) {
+    appearance: base-select;
+    background: var(--surface-3);
+    border: 1px solid var(--border-glow);
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    padding: 5px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .ac-body select option {
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    padding: 9px 11px;
+    border-radius: 7px;
+  }
+  .ac-body select option:hover, .ac-body select option:focus {
+    background: var(--accent-soft-bg);
+    color: var(--accent);
+  }
+  .ac-body select option:checked { background: transparent; color: var(--accent); font-weight: 600; }
+  .ac-body select option::checkmark { color: var(--accent); }
+}
+
+/* ===== Dropdown propio (sin <select> nativo) ===== */
 .ac-dd { position: relative; width: 100%; }
 .ac-dd-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
