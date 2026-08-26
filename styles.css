@@ -906,6 +906,22 @@ a { color: inherit; }
   font-size: 14px;
 }
 .footer-col a:hover { color: var(--accent); }
+.footer-contact a {
+  display: inline-flex; align-items: flex-start; gap: 9px;
+  line-height: 1.45;
+}
+.footer-ico {
+  flex: 0 0 auto; margin-top: 2px;
+  color: var(--accent); opacity: .7;
+  transition: opacity .15s;
+}
+.footer-contact a:hover .footer-ico { opacity: 1; }
+.footer-hours {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 14px; color: #aaa;
+}
+.footer-hours-list { display: grid; gap: 4px; line-height: 1.45; }
+.footer-hours-list .closed { color: #666; }
 .footer-bottom {
   padding-top: 24px;
   border-top: 1px solid var(--line);
