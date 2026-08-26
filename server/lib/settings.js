@@ -114,7 +114,8 @@ const EMAIL_DEFAULTS = {
   from: "iPhone UP <onboarding@resend.dev>",
   // "" ⇒ no se manda la cabecera Reply-To (las respuestas van al `from`).
   replyTo: "",
-  // "" ⇒ los avisos internos de venta nueva quedan desactivados.
+  // "" ⇒ los avisos internos de venta nueva quedan desactivados. Admite varios
+  // destinatarios separados por coma (ver parseEmailList).
   internalTo: "",
   cartRemindersEnabled: true,
   cartReminder1hEnabled: true,
@@ -173,6 +174,13 @@ function getEmailConfig() {
     else if (spec.type === "number") out[field] = parseNumber(raw, parseNumber(fallback, EMAIL_DEFAULTS[field], spec), spec);
     else out[field] = String(raw ?? fallback ?? "").trim();
   }
+  // El aviso interno puede tener varios destinatarios. Se expone de las dos
+  // formas: `internalToList` es la canónica (la que usa el mailer y el panel) y
+  // `internalTo` queda como string normalizado — sigue siendo "" cuando no hay
+  // ninguno, así que todo lo que preguntaba `if (config.internalTo)` para saber
+  // si está activado sigue funcionando igual.
+  out.internalToList = parseEmailList(out.internalTo).list;
+  out.internalTo = out.internalToList.join(", ");
   return out;
 }
 
@@ -185,6 +193,47 @@ const EMAIL_RE = /^[^\s@<>",;:]+@[^\s@<>",;:]+\.[^\s@<>",;:]{2,}$/;
 function isEmail(value) {
   const s = String(value || "").trim();
   return s.length <= 254 && EMAIL_RE.test(s);
+}
+
+// Tope de destinatarios del aviso interno. No hay caso operativo para más y
+// evita que un pegado accidental convierta el aviso de venta en una lista de
+// correo (cada destinatario es un envío más al proveedor).
+const INTERNAL_TO_MAX = 10;
+
+/**
+ * Normaliza una lista de destinatarios.
+ *
+ * Acepta un array (lo que manda el panel) o un string con comas, punto y coma o
+ * saltos de línea — que es como quedaba guardado el valor viejo de un solo
+ * correo y también lo que sale de pegar una columna de planilla. Por eso NO hay
+ * migración de datos: `"ventas@x.cl"` entra por el mismo camino y sale como una
+ * lista de uno.
+ *
+ * Devuelve `{ list, invalid }` en vez de lanzar: quien llama decide si un
+ * inválido es error duro (guardar) o algo que se descarta (leer lo guardado).
+ */
+function parseEmailList(value) {
+  const parts = (Array.isArray(value) ? value : [value])
+    .flatMap(v => String(v ?? "").split(/[,;\n\r\t]+/));
+  const list = [];
+  const invalid = [];
+  const seen = new Set();
+  for (const part of parts) {
+    // "Ventas <ventas@dominio.cl>" → "ventas@dominio.cl": es lo que copia
+    // cualquier cliente de correo y el usuario no tiene por qué limpiarlo.
+    let s = String(part ?? "").trim();
+    const named = s.match(/^[^<>]*<([^<>]+)>$/);
+    if (named) s = named[1].trim();
+    if (!s) continue;
+    if (!isEmail(s)) { invalid.push(s.slice(0, 80)); continue; }
+    // Dedupe sin distinguir mayúsculas: el dominio no las distingue y mandar el
+    // mismo aviso dos veces a la misma persona no le sirve a nadie.
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(s);
+  }
+  return { list, invalid };
 }
 
 // `from` puede venir como "Nombre <mail@dominio>" o solo "mail@dominio".
@@ -207,6 +256,20 @@ function setEmailConfig(patch = {}) {
       if (spec.min != null && n < spec.min) throw new Error(`${field} mínimo ${spec.min}`);
       if (spec.max != null && n > spec.max) throw new Error(`${field} máximo ${spec.max}`);
       setRaw(spec.key, String(n));
+    } else if (field === "internalTo") {
+      // Puede venir como array (panel) o como string con separadores (env,
+      // valor viejo, API). Se guarda siempre como lista separada por comas.
+      const { list, invalid } = parseEmailList(value);
+      if (invalid.length) {
+        const muestra = invalid.slice(0, 3).map(v => `"${v}"`).join(", ");
+        throw new Error(`internalTo inválido: ${muestra} no ${invalid.length > 1 ? "son correos" : "es un correo"}`);
+      }
+      if (list.length > INTERNAL_TO_MAX) {
+        throw new Error(`internalTo admite hasta ${INTERNAL_TO_MAX} destinatarios (llegaron ${list.length})`);
+      }
+      // Lista vacía = avisos internos desactivados, igual que el string vacío.
+      if (!list.length) { db.prepare("DELETE FROM settings WHERE key = ?").run(spec.key); continue; }
+      setRaw(spec.key, list.join(", "));
     } else {
       const s = String(value).trim();
       // Vaciar es una acción válida y significa "volver al default/omitir".
@@ -214,7 +277,7 @@ function setEmailConfig(patch = {}) {
       if (field === "from" && !isFromAddress(s)) {
         throw new Error('from inválido: usa "Nombre <correo@dominio.cl>" o "correo@dominio.cl"');
       }
-      if ((field === "replyTo" || field === "internalTo") && !isEmail(s)) {
+      if (field === "replyTo" && !isEmail(s)) {
         throw new Error(`${field} inválido: debe ser un correo (o vacío para desactivarlo)`);
       }
       if (field === "cartCouponCode" && !/^[A-Za-z0-9._-]{2,40}$/.test(s)) {
@@ -230,5 +293,6 @@ module.exports = {
   getRaw, setRaw,
   getPaymentFee, setPaymentFee,
   getTradeinPrices, setTradeinPrices, resetTradeinPrices,
-  getEmailConfig, setEmailConfig, isEmail, EMAIL_DEFAULTS,
+  getEmailConfig, setEmailConfig, isEmail, parseEmailList, EMAIL_DEFAULTS,
+  INTERNAL_TO_MAX,
 };

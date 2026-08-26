@@ -115,6 +115,9 @@ app.get("/api/health", (_req, res) => {
       from: cfg.from,
       replyToConfigured: Boolean(cfg.replyTo),
       internalToConfigured: Boolean(cfg.internalTo),
+      // Cuántos avisos internos salen por venta. El conteo no es PII; las
+      // direcciones sí, y por eso no van acá.
+      internalToCount: cfg.internalToList.length,
       captureEnabled: cfg.captureEnabled,
       cartReminders: cfg.cartRemindersEnabled,
       scheduler: require("./lib/email-scheduler").status(),

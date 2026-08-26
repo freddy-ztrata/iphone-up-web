@@ -47,8 +47,11 @@ router.get("/config", (_req, res) => {
     // Lo que todavía falta definir, explícito para el panel.
     pending: {
       replyTo: !config.replyTo,
-      internalTo: !config.internalTo,
+      internalTo: !config.internalToList.length,
     },
+    // Tope de destinatarios internos, para que el panel avise antes de que el
+    // PATCH rebote (y no lo tenga hardcodeado por su cuenta).
+    limits: { internalTo: settings.INTERNAL_TO_MAX },
   });
 });
 

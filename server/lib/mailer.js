@@ -320,21 +320,42 @@ function sendSafe(params) {
   });
 }
 
-/** Aviso interno de venta nueva. No hace nada si no hay dirección configurada. */
+/**
+ * Aviso interno de venta nueva. No hace nada si no hay dirección configurada.
+ *
+ * Puede haber más de un destinatario: se manda un email POR persona en vez de
+ * uno solo con varios `to`. Así cada envío tiene su fila en el historial y su
+ * propia idempotencia, un rebote de uno no arrastra al resto, y nadie ve las
+ * direcciones internas de los demás. La key ya incluía la dirección, así que
+ * una instalación con un solo destinatario no reenvía nada al actualizar.
+ */
 function notifyInternal(order) {
   // Sin orden no hay nada que avisar. Sin este guard, un `getOrder()` que
   // devolvió null mandaría un correo vacío con la key "…:undefined:…", que
   // además bloquearía por idempotencia el aviso de la siguiente venta rota.
   if (!order?.id) return Promise.resolve({ ok: false, skipped: true, reason: "sin orden" });
   const config = settings.getEmailConfig();
-  if (!config.internalTo) return Promise.resolve({ ok: false, skipped: true, reason: "sin correo interno configurado" });
-  return sendSafe({
+  const recipients = config.internalToList || [];
+  if (!recipients.length) return Promise.resolve({ ok: false, skipped: true, reason: "sin correo interno configurado" });
+  const sends = recipients.map(to => sendSafe({
     template: "internal_new_order",
-    to: config.internalTo,
+    to,
     data: { order },
-    orderId: order?.id || null,
-    idempotencyKey: `internal_new_order:${order?.id}:${config.internalTo}`,
-  });
+    orderId: order.id,
+    idempotencyKey: `internal_new_order:${order.id}:${to}`,
+  }));
+  return Promise.all(sends).then(results => (
+    // Con un solo destinatario devuelve el resultado tal cual (es lo que ya
+    // leía quien llamaba); con varios, el resumen del lote.
+    results.length === 1
+      ? results[0]
+      : {
+          ok: results.some(r => r.ok),
+          recipients: recipients.length,
+          sent: results.filter(r => r.ok).length,
+          results,
+        }
+  ));
 }
 
 module.exports = {

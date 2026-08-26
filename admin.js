@@ -23,7 +23,13 @@ function adminApp() {
     systemInfo: null,
     system: { loading: false, error: "", updatedAt: null, showJson: false },
     payFee: { enabled: true, pct: 3.5, saving: false },
-    tradein: { text: "", isDefault: true, loading: false, saving: false },
+    // Editor visual de recompra. `models` son filas de UI (con `id` para el
+    // :key de Alpine y `error` para el mensaje inline); el objeto que espera el
+    // backend se arma recién al guardar. `json` es el modo técnico, oculto.
+    tradein: {
+      models: [], isDefault: true, loading: false, saving: false,
+      error: "", showJson: false, json: "", jsonError: "", seq: 1,
+    },
     loadingProducts: false,
 
     // Carritos abandonados
@@ -42,6 +48,12 @@ function adminApp() {
       loading: false, saving: false, testing: false, running: false, testTo: "",
       templates: [], testingId: "", testResults: [],
     },
+    // Aviso interno de ventas: campo de etiquetas (chips). Vive fuera de
+    // `emails.config` a propósito — `draft` es lo que el usuario está
+    // escribiendo y todavía no es un destinatario; recién al confirmarse (Enter,
+    // separador, salir del campo) entra a `list`, que es lo que se guarda.
+    internalTo: { list: [], draft: "", error: "", max: 10 },
+
     emailLog: [],
     emailLogQuery: { template: "", status: "", to_email: "" },
     emailLogPage: { total: 0, limit: 50, offset: 0, hasMore: false },
@@ -688,12 +700,113 @@ function adminApp() {
         this.emails.stats = data.stats;
         this.emails.pending = data.pending;
         this.emails.templates = data.testable || [];
+        this.syncInternalToFromConfig(data.config, data.limits);
       } catch (err) { this.toast(err.message, "error"); }
       finally { this.emails.loading = false; }
     },
 
+    // ----- Aviso interno de ventas (campo de chips) -----
+
+    // El backend manda la lista ya normalizada; el split es el fallback para una
+    // instalación que todavía responde solo el string separado por comas.
+    syncInternalToFromConfig(config, limits) {
+      const list = Array.isArray(config?.internalToList)
+        ? config.internalToList.slice()
+        : this.splitEmails(config?.internalTo);
+      this.internalTo.list = list;
+      this.internalTo.draft = "";
+      this.internalTo.error = "";
+      if (Number.isFinite(limits?.internalTo)) this.internalTo.max = limits.internalTo;
+    },
+
+    // Coma, punto y coma, salto de línea y tabulador: lo que sale de pegar una
+    // columna de planilla o un "Para:" de un cliente de correo.
+    splitEmails(raw) {
+      return String(raw || "").split(/[,;\n\r\t]+/).map(s => s.trim()).filter(Boolean);
+    },
+
+    // "Ventas <ventas@x.cl>" → "ventas@x.cl". Mismo desarmado que el backend.
+    cleanEmail(raw) {
+      const s = String(raw || "").trim();
+      const named = s.match(/^[^<>]*<([^<>]+)>$/);
+      return (named ? named[1] : s).trim();
+    },
+
+    // Mismo criterio laxo que server/lib/settings.js: atajar errores de tipeo
+    // obvios, no pelear con direcciones válidas raras. El server revalida.
+    isEmailish(value) {
+      const s = String(value || "").trim();
+      return s.length <= 254 && /^[^\s@<>",;:]+@[^\s@<>",;:]+\.[^\s@<>",;:]{2,}$/.test(s);
+    },
+
+    // Agrega una dirección. Devuelve "" si entró (o si ya estaba) y el motivo
+    // del rechazo si no — el que llama decide si mostrarlo.
+    pushInternalTo(raw) {
+      const mail = this.cleanEmail(raw);
+      if (!mail) return "";
+      if (!this.isEmailish(mail)) return `"${mail}" no parece un correo`;
+      if (this.internalTo.list.some(m => m.toLowerCase() === mail.toLowerCase())) return "";
+      if (this.internalTo.list.length >= this.internalTo.max) {
+        return `Hasta ${this.internalTo.max} destinatarios`;
+      }
+      this.internalTo.list.push(mail);
+      return "";
+    },
+
+    // @input: convierte en chip todo lo que ya venga separado y deja en el
+    // campo lo último, que puede seguir escribiéndose. Cubre tipear una coma y
+    // también pegar varios de una (pegar dispara `input`, no hace falta @paste).
+    onInternalToInput() {
+      if (!/[,;\n\r\t]/.test(this.internalTo.draft)) {
+        if (this.internalTo.error) this.internalTo.error = "";
+        return;
+      }
+      const parts = this.internalTo.draft.split(/[,;\n\r\t]+/);
+      const rest = parts.pop();   // si el pegado terminó en separador, queda ""
+      let error = "";
+      for (const p of parts) error = this.pushInternalTo(p) || error;
+      this.internalTo.draft = rest.trim();
+      this.internalTo.error = error;
+    },
+
+    /**
+     * Confirma lo que quedó escrito (Enter o al salir del campo). Lo que no
+     * entra se queda visible en el input para poder corregirlo — no se pierde
+     * en silencio. Devuelve true si el campo quedó limpio.
+     */
+    commitInternalTo() {
+      const raw = this.internalTo.draft.trim();
+      if (!raw) { this.internalTo.error = ""; return true; }
+      let error = "";
+      const leftover = [];
+      for (const p of this.splitEmails(raw)) {
+        const e = this.pushInternalTo(p);
+        if (e) { error = error || e; leftover.push(p); }
+      }
+      this.internalTo.draft = leftover.join(", ");
+      this.internalTo.error = error;
+      return !error;
+    },
+
+    removeInternalTo(i) {
+      this.internalTo.list.splice(i, 1);
+      this.internalTo.error = "";
+    },
+
+    // Backspace con el campo vacío borra el último chip: es la convención de
+    // cualquier campo de etiquetas y evita tener que apuntarle a la ×.
+    onInternalToBackspace(ev) {
+      if (this.internalTo.draft || !this.internalTo.list.length) return;
+      ev.preventDefault();
+      this.internalTo.list.pop();
+      this.internalTo.error = "";
+    },
+
     async saveEmails() {
       if (this.emails.saving || !this.emails.config) return;
+      // Lo que quedó escrito sin confirmar cuenta como un destinatario más: si
+      // no es válido, se avisa y no se guarda nada (en vez de perderlo).
+      if (!this.commitInternalTo()) { this.toast(this.internalTo.error, "error"); return; }
       this.emails.saving = true;
       try {
         const c = this.emails.config;
@@ -702,7 +815,8 @@ function adminApp() {
           from: c.from,
           // "" es un valor válido y significa "borrar / volver al default".
           replyTo: c.replyTo ?? "",
-          internalTo: c.internalTo ?? "",
+          // Array: lista vacía = avisos internos desactivados.
+          internalTo: this.internalTo.list.slice(),
           cartRemindersEnabled: !!c.cartRemindersEnabled,
           cartReminder1hEnabled: !!c.cartReminder1hEnabled,
           cartReminder24hEnabled: !!c.cartReminder24hEnabled,
