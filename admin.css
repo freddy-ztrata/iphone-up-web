@@ -22,12 +22,20 @@
 
 [x-cloak] { display: none !important; }
 
+/* `dvh` después de `vh` a propósito: el navegador que no lo entiende se queda
+   con el vh y el que sí lo entiende evita que la barra de URL de iOS/Android
+   se coma el fondo (y, en drawers y modales, los botones de guardar). */
 .ac-body {
   background: var(--surface-0);
   color: var(--text);
   font-family: "Inter", system-ui, sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
+  /* El scroll lateral de página ya lo corta `html, body { overflow-x: hidden }`
+     de styles.css — no se re-declara acá. La regla de este archivo es que nada
+     llegue a necesitarlo: lo que no entra se compacta (tablas) o scrollea
+     adentro de su propia caja (pivote de stock, tabla de variantes, tabs). */
 }
 
 .ac-mono {
@@ -39,7 +47,10 @@
 /* ============== LOGIN ============== */
 .ac-login {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid; place-items: center;
+  padding: 24px 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
   position: relative;
   overflow: hidden;
   background: radial-gradient(ellipse at center, rgba(164,232,58,0.06), #000 65%);
@@ -146,7 +157,11 @@
 .ac-app {
   display: block;
   min-height: 100vh;
+  min-height: 100dvh;
 }
+/* Velo del sidebar off-canvas: no existe en desktop (ahí el sidebar es un
+   rail que no tapa nada). El @media de móvil lo enciende. */
+.ac-sidebar-overlay { display: none; }
 .ac-app:has(.ac-sidebar-expanded) .ac-sidebar { width: 240px; }
 .ac-app:has(.ac-sidebar-expanded) .ac-main { margin-left: 240px; }
 
@@ -233,7 +248,21 @@
   display: flex; align-items: center; gap: 16px;
   padding: 0 24px;
 }
-.ac-breadcrumb { font-weight: 600; font-size: 14px; color: var(--text-dim); }
+.ac-breadcrumb {
+  font-weight: 600; font-size: 14px; color: var(--text-dim);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Hamburguesa del sidebar off-canvas. Igual que el velo: solo ≤720px. */
+.ac-menu-btn {
+  display: none;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px;
+  font-size: 18px; line-height: 1; cursor: pointer;
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  place-items: center;
+}
+.ac-menu-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ac-search {
   flex: 1; max-width: 480px;
   margin: 0 auto;
@@ -380,6 +409,9 @@
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
+/* `min-width:0` en toda celda: sin esto una columna `1fr` se niega a bajar del
+   ancho de su contenido y estira el grid más allá de la tabla. */
+.ac-th, .ac-td { min-width: 0; }
 .ac-th {
   font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.08em;
@@ -403,23 +435,29 @@
 }
 .ac-orders .ac-tr { padding-top: 12px; padding-bottom: 12px; }
 .ac-orders .ac-td { min-width: 0; }
-.ac-ord-id { font-size: 12px; font-weight: 600; }
+/* El id es "ORD-" + base36 + hex (≈19 caracteres): en las columnas angostas
+   corta a dos líneas en vez de desbordar la celda. */
+.ac-ord-id { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .ac-ord-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ac-ord-total { font-weight: 700; }
 .ac-ord-sub { font-size: 12px; color: var(--text-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ac-deliv-pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
 .ac-deliv-pill.is-pickup { background: rgba(164,232,58,0.14); color: var(--accent); }
 .ac-deliv-pill.is-ship { background: var(--surface-3); color: var(--text); }
-@media (max-width: 1200px) {
+/* Los cortes salen de un presupuesto de ancho, no de números redondos: con el
+   rail expandido (240px) el ancho útil es `viewport − 336`, así que 7 columnas
+   necesitan ≥1258px y 6 necesitan ≥1000px. Si se agrega o ensancha una
+   columna, hay que recalcular el escalón, no solo el `grid-template-columns`. */
+@media (max-width: 1280px) {
   /* La entrega ya se deduce del detalle; el estado de envío no. */
   .ac-orders .ac-table-head, .ac-orders .ac-tr {
-    grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1.3fr) 100px 100px 108px 104px;
+    grid-template-columns: minmax(124px, 1.5fr) minmax(104px, 1.3fr) 96px 96px 104px 100px;
   }
   .ac-orders .ac-oc-deliv { display: none; }
 }
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .ac-orders .ac-table-head, .ac-orders .ac-tr {
-    grid-template-columns: minmax(140px, 1.4fr) 96px 100px 104px;
+    grid-template-columns: minmax(112px, 1.4fr) 88px 92px 96px;
   }
   .ac-orders .ac-oc-cli, .ac-orders .ac-oc-date { display: none; }
 }
@@ -445,14 +483,14 @@
 .ac-state-pill.cart-recovered { background: rgba(164,232,58,0.12); color: var(--accent); }
 .ac-state-pill.cart-converted { background: rgba(110,227,107,0.12); color: var(--ok); }
 .ac-state-pill.cart-expired { background: var(--surface-3); color: var(--text-mute); }
-@media (max-width: 1100px) {
+@media (max-width: 1160px) {
   .ac-carts .ac-table-head, .ac-carts .ac-tr {
-    grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1.2fr) 100px 120px 100px;
+    grid-template-columns: minmax(120px, 1.5fr) minmax(96px, 1.2fr) 88px 100px 84px;
   }
   .ac-carts .ac-cc-date { display: none; }
 }
-@media (max-width: 780px) {
-  .ac-carts .ac-table-head, .ac-carts .ac-tr { grid-template-columns: minmax(140px, 1.5fr) 100px 120px; }
+@media (max-width: 900px) {
+  .ac-carts .ac-table-head, .ac-carts .ac-tr { grid-template-columns: minmax(124px, 1.5fr) 96px 112px; }
   .ac-carts .ac-cc-items, .ac-carts .ac-cc-rem { display: none; }
 }
 
@@ -464,9 +502,9 @@
 .ac-emails .ac-tr { padding-top: 12px; padding-bottom: 12px; cursor: default; }
 .ac-emails .ac-td { min-width: 0; font-size: 13px; }
 .ac-email-events { display: flex; gap: 5px; font-size: 13px; }
-@media (max-width: 1000px) {
+@media (max-width: 1080px) {
   .ac-emails .ac-table-head, .ac-emails .ac-tr {
-    grid-template-columns: minmax(160px, 1.6fr) 120px 96px 110px;
+    grid-template-columns: minmax(128px, 1.6fr) 96px 84px 92px;
   }
   .ac-emails .ac-td:nth-child(2) { display: none; }
   .ac-emails .ac-th:nth-child(2) { display: none; }
@@ -533,7 +571,7 @@
 /* ============== STOCK VIEW ============== */
 .ac-stock-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
   gap: 16px;
 }
 .ac-stock-card {
@@ -543,6 +581,9 @@
   padding: 18px;
 }
 .ac-stock-card h3 { margin: 0 0 14px; font-size: 16px; font-weight: 700; }
+/* El pivote no se compacta (las columnas son las capacidades reales): cuando
+   no entra, scrollea adentro de la tarjeta y no arrastra la página. */
+.ac-stock-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ac-stock-table { width: 100%; border-collapse: collapse; }
 .ac-stock-table th, .ac-stock-table td {
   padding: 8px 6px;
@@ -582,7 +623,7 @@
 /* ============== COUPONS ============== */
 .ac-coupons-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: 16px;
 }
 .ac-coupon {
@@ -627,7 +668,16 @@
 .ac-coupon-actions { margin-top: auto; display: flex; gap: 6px; }
 
 /* ============== TABS ============== */
-.ac-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+/* Nunca se apilan ni se comprimen: cuando no entran, la fila scrollea en
+   horizontal (sin barra visible). Un tab partido en dos líneas rompe el
+   subrayado del activo. */
+.ac-tabs {
+  display: flex; gap: 4px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.ac-tabs::-webkit-scrollbar { display: none; }
 .ac-tab {
   background: transparent; border: none; color: var(--text-dim);
   padding: 10px 16px;
@@ -636,6 +686,7 @@
   font-family: inherit;
   border-bottom: 2px solid transparent;
   transition: all .15s;
+  flex: 0 0 auto; white-space: nowrap;
 }
 .ac-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .ac-tab:hover:not(.active) { color: var(--text); }
@@ -737,7 +788,7 @@
 .ac-sys-pill.bad { background: rgba(255,90,90,0.12); color: var(--danger); }
 
 .ac-sys-metrics {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
   gap: 12px; margin-bottom: 18px;
 }
 .ac-sys-metric {
@@ -790,6 +841,7 @@
 .ac-drawer {
   position: fixed;
   top: 0; right: 0; bottom: 0;
+  height: 100dvh;
   width: min(440px, 100vw);
   background: var(--surface-1);
   border-left: 1px solid var(--border-glow);
@@ -805,7 +857,7 @@
   border-bottom: 1px solid var(--border);
   display: flex; justify-content: space-between; align-items: center;
 }
-.ac-drawer-head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.ac-drawer-head h2 { margin: 0; font-size: 18px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ac-drawer-body { padding: 24px; overflow-y: auto; flex: 1; }
 .ac-drawer-body label { display: block; margin-bottom: 12px; }
 .ac-drawer-body input, .ac-drawer-body select, .ac-drawer-body textarea {
@@ -839,7 +891,7 @@
 .ac-edit-section-title { font-size: 12px; font-weight: 700; color: var(--text-mute); letter-spacing: .08em; text-transform: uppercase; margin-top: 6px; }
 .ac-edit-model { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: var(--surface-0); display: flex; flex-direction: column; gap: 10px; }
 .ac-edit-model-head { display: flex; align-items: center; gap: 10px; }
-.ac-edit-model-head input { flex: 1; font-weight: 600; }
+.ac-edit-model-head input { flex: 1; min-width: 0; font-weight: 600; }
 .ac-edit-variants { width: 100%; border-collapse: collapse; }
 .ac-edit-variants th { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-mute); text-align: left; padding: 0 4px 4px; font-weight: 600; }
 .ac-edit-variants td { padding: 3px 4px; }
@@ -858,7 +910,7 @@
 .ac-edit-size-name { width: 130px; font-weight: 700 !important; }
 .ac-edit-size-meta { font-size: 12px; color: var(--text-mute); margin-right: auto; }
 .ac-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.ac-modal { width: min(440px, 100%); background: var(--surface-1); border: 1px solid var(--border-glow); border-radius: 18px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; max-height: 90vh; }
+.ac-modal { width: min(440px, 100%); background: var(--surface-1); border: 1px solid var(--border-glow); border-radius: 18px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; max-height: 90vh; max-height: 90dvh; }
 .ac-modal-head { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .ac-modal-head h2 { margin: 0; font-size: 17px; font-weight: 700; }
 .ac-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
@@ -866,13 +918,15 @@
 
 /* ===== Gestor de fotos / galería (estilo Shopify) ===== */
 .ac-hero-edit { display: flex; align-items: center; gap: 10px; }
-.ac-hero-edit input { flex: 1; }
+/* `min-width:0`: un <input> dentro de un flex no baja de su ancho intrínseco
+   (~20 caracteres) y empuja el botón de subir fuera del drawer. */
+.ac-hero-edit input { flex: 1; min-width: 0; }
 .ac-hero-preview { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); padding: 3px; flex-shrink: 0; }
 .ac-upload-btn { cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; }
 .ac-media { display: flex; flex-direction: column; gap: 10px; }
 .ac-media-current { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-mute); }
 .ac-media-current img { width: 56px; height: 56px; object-fit: contain; border-radius: 10px; border: 1px solid var(--border-glow); background: var(--surface-2); padding: 4px; }
-.ac-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.ac-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(84px, 100%), 1fr)); gap: 8px; }
 /* La miniatura es cuadrada; el input de texto alternativo va debajo, dentro de
    la misma tarjeta (por eso el aspect-ratio vive en el <img>, no en el tile). */
 .ac-media-item { position: relative; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 5px; cursor: grab; display: flex; flex-direction: column; gap: 4px; }
@@ -889,7 +943,11 @@
 .ac-media-actions { position: absolute; top: 3px; right: 3px; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
 .ac-media-item:hover .ac-media-actions { opacity: 1; }
 .ac-media-btn { width: 22px; height: 22px; border-radius: 6px; border: none; background: rgba(0,0,0,0.72); color: #fff; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; }
-.ac-media-btn:hover { background: var(--accent); color: #000; }
+.ac-media-btn:hover:not(:disabled) { background: var(--accent); color: #000; }
+.ac-media-btn:disabled { opacity: .35; cursor: default; }
+/* Reordenar con botones. En desktop el drag&drop ya resuelve esto, así que
+   solo aparece donde no hay hover (touch), en la esquina libre del tile. */
+.ac-media-move { position: absolute; top: 3px; left: 3px; display: none; gap: 3px; }
 .ac-media-main-badge { position: absolute; bottom: 28px; left: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #000; padding: 2px 5px; border-radius: 5px; }
 .ac-media-drop { aspect-ratio: 1; border: 1.5px dashed var(--border-strong); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; line-height: 1.3; color: var(--text-mute); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .ac-media-drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft-bg); }
@@ -1017,7 +1075,9 @@
 .ac-an-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; margin-bottom: 16px; }
 .ac-an-card-title { margin: 0 0 14px; font-size: 14px; font-weight: 700; }
 .ac-an-bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; }
-.ac-an-bar-wrap { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+/* `min-width:0`: con 90 días el flex-basis auto de cada barra suma más que el
+   ancho del panel y el gráfico se sale de la tarjeta. */
+.ac-an-bar-wrap { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
 .ac-an-bar { width: 100%; min-height: 4px; background: linear-gradient(180deg, var(--accent), rgba(164,232,58,0.3)); border-radius: 4px 4px 0 0; transition: height .3s; }
 .ac-an-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .ac-an-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -1213,7 +1273,7 @@
    entran en dos filas en desktop y en una columna en mobile sin media query. */
 .ac-test-grid {
   display: grid; gap: 10px; margin: 16px 0 4px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
 }
 .ac-test-btn {
   display: flex; flex-direction: column; gap: 5px; text-align: left;
@@ -1386,7 +1446,7 @@
 }
 .ac-range-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft-bg); }
 .ac-an-bar-sales { background: linear-gradient(180deg, var(--ok), rgba(110,227,107,0.25)); }
-.ac-an-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.ac-an-grid { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 
 /* ============== EDITOR: costo / margen ============== */
 .ac-edit-variants-scroll { overflow-x: auto; }
@@ -1399,7 +1459,21 @@
 .ac-var-margin { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .ac-var-margin-na { color: var(--text-mute); font-weight: 400; }
 
-/* ============== RESPONSIVE ============== */
+/* ============== RESPONSIVE ==============
+   Tres escalones, y cada uno resuelve un problema distinto:
+
+   ≤1024px  tablet apaisada — menos columnas, mismo layout.
+   ≤900px   tablet retrato (768) — el rail expandido de 240px deja el contenido
+            en 464px y la tabla de órdenes ya no entra: se achica el rail.
+   ≤720px   teléfono — el sidebar deja de ocupar ancho (off-canvas), las tablas
+            pasan a filas apiladas, los controles suben a 44px y todo campo de
+            texto va en 16px (por debajo, iOS hace zoom al enfocar).
+   ≤560px   teléfono angosto (360) — órdenes y carritos apilan también su
+            segunda línea.
+
+   Regla transversal: nada genera scroll horizontal de página. Lo que no se
+   puede compactar (pivote de stock, tabla de variantes) scrollea adentro de
+   su propia caja. */
 @media (max-width: 1024px) {
   .ac-kpis { grid-template-columns: repeat(2, 1fr); }
   .ac-grid-2 { grid-template-columns: 1fr; }
@@ -1408,49 +1482,256 @@
     font-size: 13px;
   }
 }
-@media (max-width: 720px) {
-  .ac-sidebar, .ac-app:has(.ac-sidebar-expanded) .ac-sidebar { width: 64px; padding: 12px 6px; }
-  .ac-main, .ac-app:has(.ac-sidebar-expanded) .ac-main { margin-left: 64px; }
-  .ac-nav-label, .ac-search-placeholder, .ac-user-name { display: none; }
-  /* Sin label no hay a dónde empujar el badge: va encima del ícono. */
-  .ac-nav-item { position: relative; }
-  .ac-nav-badge { position: absolute; top: 4px; right: 4px; margin-left: 0; }
-  .ac-search { padding: 8px 12px; }
-  .ac-content { padding: 16px 14px 64px; }
-  .ac-page-title { font-size: 22px; }
-  .ac-kpis { grid-template-columns: 1fr; }
-  .ac-table-head, .ac-tr { grid-template-columns: 40px 1fr 80px 70px; }
-  .ac-th-line, .ac-th-storage, .ac-th-state, .ac-th-actions,
-  .ac-td-line, .ac-td-storage, .ac-td-state, .ac-td-actions { display: none; }
 
+/* iPad retrato: 768 − 240 de rail − 64 de padding = 464px de contenido, justo
+   el mínimo de la tabla de órdenes. Se recorta el rail antes que la tabla. */
+@media (max-width: 900px) {
+  .ac-app:has(.ac-sidebar-expanded) .ac-sidebar { width: 208px; }
+  .ac-app:has(.ac-sidebar-expanded) .ac-main { margin-left: 208px; }
+  .ac-content { padding: 20px 20px 64px; }
+  .ac-an-kpis { grid-template-columns: repeat(2, 1fr); }
+  /* Catálogo: el resumen de variantes es lo único redundante (el rango de
+     precios y el stock ya lo resumen), así que es la primera columna en caer. */
+  .ac-table-head, .ac-tr { grid-template-columns: 40px 40px 1.1fr 96px 60px 76px 60px; }
+  .ac-th-storage, .ac-td-storage { display: none; }
+}
+
+@media (max-width: 720px) {
+  /* ---------- Sidebar off-canvas ----------
+     `sidebarExpanded` cambia de significado acá: en desktop es "rail ancho",
+     en móvil es "panel abierto". El rail de 64px se fue: en 360px eran 18% de
+     la pantalla para mostrar solo íconos. */
+  .ac-sidebar-overlay {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.62);
+    backdrop-filter: blur(3px);
+    z-index: 45;
+  }
+  .ac-sidebar,
+  .ac-app:has(.ac-sidebar-expanded) .ac-sidebar {
+    width: min(272px, 84vw);
+    padding: 16px 10px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 16px 0 48px rgba(0,0,0,0.65);
+  }
+  .ac-sidebar.ac-sidebar-expanded { transform: translateX(0); }
+  .ac-main, .ac-app:has(.ac-sidebar-expanded) .ac-main { margin-left: 0; }
+  /* Abierto siempre muestra las etiquetas: es un menú, no un rail. Y el badge
+     vuelve al borde derecho (la regla base lo superpone al ícono). */
+  .ac-nav-label { opacity: 1; }
+  .ac-sidebar .ac-nav-badge,
+  .ac-sidebar:not(.ac-sidebar-expanded) .ac-nav-badge { position: static; margin-left: auto; }
+  .ac-nav-item { min-height: 46px; }
+  .ac-sidebar-toggle { min-height: 44px; }
+
+  /* ---------- Topbar ---------- */
+  .ac-menu-btn { display: grid; }
+  .ac-topbar {
+    gap: 10px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .ac-breadcrumb { flex: 1 1 auto; }
+  /* La búsqueda queda como botón-ícono: el placeholder no cabe y el ⌘K no
+     aplica sin teclado. */
+  .ac-search {
+    flex: 0 0 auto; width: 44px; height: 44px;
+    margin: 0 0 0 auto; padding: 0;
+    justify-content: center; border-radius: 12px;
+  }
+  .ac-search-placeholder, .ac-search kbd, .ac-user-name { display: none; }
+  .ac-search-icon { font-size: 18px; }
+  .ac-user-avatar { width: 36px; height: 36px; }
+
+  /* ---------- Contenido ---------- */
+  .ac-content {
+    padding: 16px 14px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .ac-page-title { font-size: 22px; }
   /* La cabecera de página apila título y acciones en vez de comprimirlas. */
   .ac-page-head { flex-direction: column; align-items: stretch; gap: 12px; }
   .ac-page-actions { flex-wrap: wrap; }
-  .ac-filters > .ac-select, .ac-filter-date { flex: 1 1 140px; max-width: none; }
+  .ac-page-actions > * { flex: 1 1 auto; }
+  .ac-kpis { grid-template-columns: 1fr; }
+  .ac-kpi { padding: 16px; }
+  .ac-kpi-value { font-size: 28px; }
+  .ac-panel { padding: 16px 14px; }
+  .ac-setting-card, .ac-sys-overall { padding: 16px 14px; }
+  .ac-sys-list { padding: 2px 14px; }
+  .ac-setting-actions > * { flex: 1 1 auto; }
 
-  /* Los paneles a pantalla completa: en 360px un drawer de 520px se corta. */
-  .ac-drawer, .ac-drawer-wide, .ac-drawer-order { width: 100vw; }
+  /* ---------- Controles: 16px y 44px ----------
+     16px porque iOS hace zoom al enfocar cualquier campo más chico, y salir de
+     ese zoom deja la página corrida. 44px es el mínimo táctil. */
+  .ac-field input, .ac-field select, .ac-field textarea,
+  .ac-inline-input, .ac-select,
+  .ac-drawer-body input, .ac-drawer-body select, .ac-drawer-body textarea,
+  .ac-edit-body input:not([type=checkbox]), .ac-edit-body select,
+  .ac-modal-body input:not([type=checkbox]), .ac-modal-body select,
+  .ac-dd-btn, .ac-dd-opt, .ac-filter-search, .ac-textarea, .ac-chips-input,
+  .ac-json-editor, .ac-media-alt, .ac-palette-input { font-size: 16px; }
+  /* Los campos de Ajustes → Emails / Sistema usan .ac-edit-field pero cuelgan
+     de .ac-setting-card, no de .ac-edit-body ni .ac-modal-body: sin esta regla
+     se quedan con el tamaño por defecto del navegador (≈13px) y iOS los
+     agranda al enfocarlos. */
+  .ac-edit-field input:not([type=checkbox]),
+  .ac-edit-field select,
+  .ac-edit-field textarea { font-size: 16px; min-height: 44px; }
+  .ac-chips { min-height: 44px; }
+  .ac-edit-variants input, .ac-manual-items input { font-size: 16px !important; }
+  .ac-field input, .ac-field select, .ac-select, .ac-filter-search,
+  .ac-dd-btn, .ac-textarea,
+  .ac-drawer-body input, .ac-drawer-body select,
+  .ac-edit-body input:not([type=checkbox]), .ac-edit-body select,
+  .ac-modal-body input:not([type=checkbox]), .ac-modal-body select { min-height: 44px; }
+  .ac-btn-primary, .ac-btn-ghost, .ac-btn-danger, .ac-tab { min-height: 44px; }
+  .ac-btn-sm { min-height: 40px; }
+  .ac-icon-btn { width: 44px; height: 44px; }
+  .ac-chip-x { width: 26px; height: 26px; }
+  .ac-chips-input { min-width: 120px; }
+  .ac-stock-cell { min-height: 40px; min-width: 44px; }
+  .ac-toast-undo { min-height: 40px; padding: 0 6px; }
+  .ac-edit-checkbox input[type=checkbox] { width: 20px; height: 20px; }
+  /* Las columnas que existían solo para alojar un ac-icon-btn de 32/36/40px.
+     En .ac-user-row la 3ª es `auto` porque la comparte con el pill de estado. */
+  .ac-user-row { grid-template-columns: 40px 1fr auto; }
+  .ac-supp-row { grid-template-columns: 1fr auto 44px; }
+  .ac-edit-variants td:last-child, .ac-manual-items td:last-child { width: 44px; }
+
+  /* ---------- Filtros ---------- */
+  .ac-filter-search { flex: 1 1 100%; }
+  .ac-filters > .ac-select, .ac-filter-date { flex: 1 1 140px; max-width: none; }
+  .ac-filters > .ac-btn-ghost { flex: 1 1 100%; align-self: stretch; }
+
+  /* ---------- Tablas ----------
+     Todas pasan de "grilla de columnas" a "fila apilada": la cabecera deja de
+     tener sentido (los rótulos no corresponden a ninguna columna) y se oculta. */
+  .ac-table-head, .ac-tr { grid-template-columns: 40px 1fr 80px 70px; }
+  .ac-tr { padding: 12px 14px; }
+  .ac-th-line, .ac-th-storage, .ac-th-state, .ac-th-actions,
+  .ac-td-line, .ac-td-storage, .ac-td-state, .ac-td-actions { display: none; }
+
+  /* Catálogo: foto · (modelo / precio) · stock. El rango de precios
+     ("$180.000 – $250.000") no entra al lado del nombre, va debajo. */
+  .ac-catalog .ac-table-head { display: none; }
+  .ac-catalog .ac-tr { grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; }
+  .ac-catalog .ac-td-img   { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  .ac-catalog .ac-td-name  { grid-column: 2; grid-row: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-catalog .ac-td-price { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text-dim); }
+  .ac-catalog .ac-td-stock { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+
+  /* Historial de emails: 5 columnas no entran de ninguna forma en 360px. */
+  .ac-emails .ac-table-head { display: none; }
+  .ac-emails .ac-tr { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .ac-emails .ac-td { overflow-wrap: anywhere; }
+  .ac-emails .ac-td:nth-child(1) { grid-column: 1 / -1; grid-row: 1; }
+  .ac-emails .ac-td:nth-child(2) { display: block; grid-column: 1; grid-row: 2; }
+  .ac-emails .ac-td:nth-child(3) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .ac-emails .ac-td:nth-child(4) { grid-column: 1; grid-row: 3; }
+  .ac-emails .ac-td:nth-child(5) { grid-column: 2; grid-row: 3; justify-self: end; text-align: right; }
+
+  /* ---------- Vistas ---------- */
+  .ac-stock-card { padding: 14px; }
+  .ac-coupon { grid-template-columns: 92px 1px 1fr; }
+  .ac-coupon-left { padding: 18px 10px; }
+  .ac-coupon-discount { font-size: 26px; }
+  .ac-coupon-body { padding: 14px; }
+  .ac-an-realtime { padding: 18px 16px; }
+  .ac-an-rt-num { font-size: 44px; }
+  .ac-an-card { padding: 16px 14px; }
+  /* Con 90 días son 89 separaciones: a 4px se comen el ancho del panel. */
+  .ac-an-bars { gap: 2px; height: 130px; }
+  .ac-audit-row { grid-template-columns: 1fr; gap: 4px; }
+  .ac-media-grid { grid-template-columns: repeat(auto-fill, minmax(min(104px, 100%), 1fr)); }
+  /* El badge se posiciona desde el pie del tile: con el campo de texto
+     alternativo en 44px hay que subirlo o queda encima del input. */
+  .ac-media-main-badge { bottom: 56px; }
+  .ac-bulk-preview th:not(:first-child), .ac-bulk-preview td:not(:first-child) { width: 92px; }
+  .ac-manual-items td:nth-child(2) { width: 68px; }
+  .ac-manual-items td:nth-child(3) { width: 100px; }
+  .ac-email-mini-row { flex-wrap: wrap; }
+
+  /* ---------- Drawers y modales ----------
+     A pantalla completa: en 360px un drawer de 520px se corta. `dvh` +
+     safe-area para que el pie con "Guardar" no quede bajo la barra del
+     navegador ni bajo la barra de gestos. */
+  .ac-drawer, .ac-drawer-wide, .ac-drawer-order { width: 100vw; width: 100dvw; }
   .ac-tabs-drawer { padding: 0 16px; }
   .ac-drawer-body, .ac-edit-body { padding: 16px; }
+  .ac-drawer-body { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .ac-drawer-head, .ac-edit-foot, .ac-modal-head, .ac-modal-body, .ac-modal-foot { padding-left: 16px; padding-right: 16px; }
+  .ac-edit-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .ac-edit-foot > * { flex: 1 1 auto; }
   .ac-modal-overlay { padding: 0; align-items: flex-end; }
-  .ac-modal, .ac-modal-lg { width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; }
+  .ac-modal, .ac-modal-lg { width: 100%; max-height: 92vh; max-height: 92dvh; border-radius: 18px 18px 0 0; }
+  .ac-modal-foot { padding-bottom: calc(16px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .ac-modal-foot > * { flex: 1 1 auto; }
   .ac-edit-grid { grid-template-columns: 1fr; }
   .ac-order-kv { grid-template-columns: 84px 1fr; }
+  .ac-order-cta { padding-bottom: env(safe-area-inset-bottom); }
+  .ac-hist-row { grid-template-columns: 1fr; gap: 2px; }
   .ac-critical-row { grid-template-columns: 44px 1fr auto; row-gap: 6px; }
   .ac-critical-row .ac-stock-pill { justify-self: end; }
   .ac-critical-actions { grid-column: 1 / -1; justify-content: flex-end; }
-  .ac-hist-row { grid-template-columns: 1fr; gap: 2px; }
-  .ac-toasts { left: 14px; right: 14px; bottom: 14px; }
+
+  /* Command palette: 15vh de aire arriba deja la lista fuera de pantalla
+     cuando sube el teclado. */
+  .ac-palette-overlay { padding: 12px 12px 0; }
+  .ac-palette { width: min(640px, 100%); }
+  .ac-palette-input { padding: 16px 18px; }
+  .ac-palette-result { padding: 12px 18px; }
+  .ac-palette-results { max-height: 52vh; max-height: 52dvh; }
+  .ac-palette-foot { display: none; }
+
+  .ac-toasts { left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); }
   .ac-toast { min-width: 0; }
+
+  /* ---------- Login ---------- */
+  .ac-login-card { width: min(420px, 100%); padding: 30px 22px; border-radius: 20px; }
+  .ac-login-card h1 { font-size: 26px; }
+  .ac-login-logo { height: 60px; }
+
   /* Colocación explícita: con 5 hijos y 3 columnas, el auto-placement deja
      los pills en cualquier hueco. */
-  .ac-user-row { grid-template-columns: 40px 1fr auto; row-gap: 8px; }
+  .ac-user-row { row-gap: 8px; }
   .ac-user-row .ac-user-info { min-width: 0; }
   .ac-user-row .ac-role-pill { grid-row: 2; grid-column: 2; justify-self: start; }
   .ac-user-row .ac-state-pill { grid-row: 2; grid-column: 3; justify-self: end; }
   .ac-user-row > .ac-icon-btn { grid-row: 1; grid-column: 3; }
   /* La fila de exclusiones tiene 3 hijos, no 5: cabe en una línea. */
-  .ac-supp-row { grid-template-columns: 1fr auto 40px; row-gap: 0; }
+  .ac-supp-row { row-gap: 0; }
   .ac-supp-row .ac-role-pill { grid-row: 1; grid-column: 2; justify-self: end; }
+}
+
+/* 360px: órdenes y carritos ya no entran ni en 3 columnas (el total y los
+   pills de estado se comen el ancho del cliente). Pasan a dos líneas. */
+@media (max-width: 560px) {
+  .ac-orders .ac-table-head, .ac-carts .ac-table-head { display: none; }
+
+  .ac-orders .ac-tr { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .ac-orders .ac-oc-ord    { grid-column: 1; grid-row: 1; }
+  .ac-orders .ac-oc-total  { grid-column: 2; grid-row: 1; justify-self: end; }
+  .ac-orders .ac-oc-fulfil { grid-column: 1; grid-row: 2; }
+  /* Con la fila apilada vuelve a haber lugar para el estado de pago, que el
+     escalón de 620px había escondido. */
+  .ac-orders .ac-oc-state  { display: block; grid-column: 2; grid-row: 2; justify-self: end; }
+
+  .ac-carts .ac-tr { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .ac-carts .ac-cc-cli   { grid-column: 1; grid-row: 1; }
+  .ac-carts .ac-cc-total { grid-column: 2; grid-row: 1; justify-self: end; }
+  .ac-carts .ac-cc-state { grid-column: 1; grid-row: 2; }
+  .ac-carts .ac-cc-rem   { display: block; grid-column: 2; grid-row: 2; justify-self: end; }
+}
+
+/* Sin hover no hay forma de descubrir los botones de la galería ni de
+   arrastrar una foto: los controles quedan siempre visibles y el reordenar
+   pasa a botones (mismos handlers que el drag&drop). */
+@media (hover: none) {
+  .ac-media-actions { opacity: 1; }
+  .ac-media-move { display: flex; }
+  .ac-media-btn { width: 30px; height: 30px; font-size: 13px; }
 }

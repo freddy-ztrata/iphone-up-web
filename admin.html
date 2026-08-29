@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
 <title>iPhone UP · Neon Console</title>
 <meta name="robots" content="noindex,nofollow" />
@@ -55,6 +55,10 @@
 <!-- ============== MAIN APP ============== -->
 <div class="ac-app" x-show="session">
 
+  <!-- Velo del sidebar off-canvas. Solo existe ≤720px (el CSS lo esconde en
+       desktop); ahí el sidebar deja de ocupar ancho y se superpone. -->
+  <div class="ac-sidebar-overlay" x-show="sidebarExpanded" @click="sidebarExpanded = false" x-cloak></div>
+
   <!-- Sidebar -->
   <aside class="ac-sidebar" :class="{ 'ac-sidebar-expanded': sidebarExpanded }">
     <button class="ac-sidebar-toggle" @click="sidebarExpanded = !sidebarExpanded" :aria-expanded="sidebarExpanded" aria-label="Expandir/colapsar menú">
@@ -85,6 +89,8 @@
   <!-- Topbar + Content -->
   <div class="ac-main">
     <header class="ac-topbar">
+      <button class="ac-menu-btn" @click="sidebarExpanded = !sidebarExpanded"
+              :aria-expanded="sidebarExpanded" aria-label="Abrir menú">☰</button>
       <div class="ac-breadcrumb">
         <span x-text="nav.find(n => n.id === view)?.label || 'Dashboard'"></span>
       </div>
@@ -295,7 +301,9 @@
           </div>
         </header>
 
-        <div class="ac-table" :class="{ loading: loadingProducts }">
+        <!-- `ac-catalog` no es decorativo: identifica esta tabla frente a
+             .ac-orders/.ac-carts/.ac-emails para la compactación en móvil. -->
+        <div class="ac-table ac-catalog" :class="{ loading: loadingProducts }">
           <div class="ac-table-head">
             <div class="ac-th ac-th-img"></div>
             <div class="ac-th ac-th-line">Línea</div>
@@ -357,6 +365,9 @@
           <template x-for="product in products.filter(p => !p.hidden && p.id !== 0)" :key="product.id">
             <div class="ac-stock-card">
               <h3 x-text="'iPhone ' + product.line"></h3>
+              <!-- El pivote capacidad × color no se puede comprimir sin perder
+                   la grilla: en móvil scrollea adentro de la tarjeta. -->
+              <div class="ac-stock-scroll">
               <table class="ac-stock-table">
                 <thead>
                   <tr>
@@ -391,6 +402,7 @@
                   </template>
                 </tbody>
               </table>
+              </div>
             </div>
           </template>
         </div>
@@ -1420,6 +1432,17 @@
                            @dragover.prevent
                            @drop.prevent="galleryDrop(model, gi)">
                         <img :src="img.url" :alt="img.alt || ''" draggable="false" />
+                        <!-- Reordenar sin arrastrar: en touch no hay dragstart.
+                             Reusa los mismos handlers del drag&drop, así que el
+                             POST /uploads/reorder es idéntico. Oculto en desktop. -->
+                        <div class="ac-media-move">
+                          <button class="ac-media-btn" :disabled="gi === 0" title="Mover antes"
+                                  aria-label="Mover antes"
+                                  @click="galleryDragStart(model, gi); galleryDrop(model, gi - 1)">‹</button>
+                          <button class="ac-media-btn" :disabled="gi === (model.gallery || []).length - 1"
+                                  title="Mover después" aria-label="Mover después"
+                                  @click="galleryDragStart(model, gi); galleryDrop(model, gi + 1)">›</button>
+                        </div>
                         <div class="ac-media-actions">
                           <button class="ac-media-btn" x-show="img.url !== model.img" @click="setModelMainImage(model, img.url)" title="Hacer principal">★</button>
                           <button class="ac-media-btn" @click="deleteModelImage(model, img)" title="Eliminar">✕</button>

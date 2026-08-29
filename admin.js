@@ -156,10 +156,18 @@ function adminApp() {
 
     // ----- Lifecycle -----
     async init() {
+      // `sidebarExpanded` significa dos cosas según el ancho: en desktop es
+      // "rail de 240px vs 72px" (expandido por default), en ≤720px es "panel
+      // off-canvas abierto" (cerrado por default, o taparía la pantalla).
+      this.sidebarExpanded = !this.isMobile();
       this.paintLoginWaves();
       await this.fetchMe();
       this.bindKeyboard();
     },
+
+    // Mismo breakpoint que el bloque off-canvas de admin.css. Si cambia allá,
+    // cambia acá.
+    isMobile() { return window.matchMedia("(max-width: 720px)").matches; },
 
     paintLoginWaves() {
       const g = document.getElementById("wave-paths-login");
@@ -191,6 +199,7 @@ function adminApp() {
           else if (this.orderDrawer.open) this.closeOrderDrawer();
           else if (this.cartDrawer.open) this.closeCartDrawer();
           else if (this.prodEditor.open) this.closeProductEditor();
+          else if (this.sidebarExpanded && this.isMobile()) this.sidebarExpanded = false;
           return;
         }
 
@@ -265,6 +274,8 @@ function adminApp() {
 
     // ----- Navigation -----
     goto(viewId) {
+      // En móvil el sidebar tapa el contenido: navegar implica cerrarlo.
+      if (this.isMobile()) this.sidebarExpanded = false;
       if (viewId !== "analytics") this.stopRealtime();
       // Un editor no tiene Ajustes: si llega ahí por atajo, lo mandamos al inicio.
       if (viewId === "settings" && !this.isAdmin) viewId = "dashboard";
