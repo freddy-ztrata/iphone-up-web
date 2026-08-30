@@ -8,6 +8,7 @@
 const express = require("express");
 const db = require("../../db");
 const tz = require("../../lib/tz");
+const carts = require("../../lib/carts");
 
 const router = express.Router();
 
@@ -95,14 +96,12 @@ router.get("/", (_req, res) => {
 
   // Carritos recuperables: vivos, con email capturado y consentimiento. Es el
   // número que pinta el badge del sidebar (lo que hay que hacer, no lo que hay).
+  // Sale de carts.countRecoverable() para compartir la definición de "vivo" con
+  // la cola de recordatorios: cuenta por estado EFECTIVO, así que incluye los
+  // carros con un pago pendiente o rechazado y excluye los realmente pagados.
   let recoverableCarts = 0;
   try {
-    recoverableCarts = db.prepare(`
-      SELECT COUNT(*) AS n FROM carts
-      WHERE status IN ('active','recovered') AND consent = 1
-        AND email IS NOT NULL AND email != '' AND item_count > 0
-        AND expires_at > datetime('now')
-    `).get().n;
+    recoverableCarts = carts.countRecoverable();
   } catch { /* la tabla puede no existir en una DB anterior a la migración 007 */ }
 
   res.json({

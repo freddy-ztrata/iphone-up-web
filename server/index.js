@@ -26,6 +26,13 @@ try { require("./lib/color-seed").seedColorsIfNeeded(); } catch (err) { console.
 // Producto de prueba ($500, activo) para testear el flujo de compra. Idempotente (una vez).
 try { require("./lib/test-product").ensureTestProduct(); } catch (err) { console.error("[boot] test product failed:", err.message); }
 
+// Normaliza los carritos marcados como comprados sin pago aprobado: rastro del
+// bug que daba por vendida una preferencia de MP recién creada. Idempotente y no
+// destructiva (ver repairFalseConversions en lib/carts.js). También corre en cada
+// tick del scheduler, así que un deploy con el scheduler apagado igual se repara
+// al arrancar.
+try { require("./lib/carts").repairFalseConversions(); } catch (err) { console.error("[boot] cart repair failed:", err.message); }
+
 // Routers
 const mercadopagoRouter = require("./routes/mercadopago");
 const chilexpressRouter = require("./routes/chilexpress");

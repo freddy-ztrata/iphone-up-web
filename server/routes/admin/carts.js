@@ -14,7 +14,11 @@ const { requireAdmin } = require("../../middleware/auth");
 
 const router = express.Router();
 
-// GET /api/admin/carts?status=&q=&has_email=&from=&to=&limit=&offset=
+// GET /api/admin/carts?status=&payment=&q=&has_email=&from=&to=&limit=&offset=
+//
+// `status` es el estado EFECTIVO del carro (calculado contra la orden real, no
+// contra la columna); `payment` filtra por el estado del pago de esa orden.
+// Son cosas distintas: un carro con pago pendiente sigue estando "activo".
 router.get("/", (req, res) => {
   try {
     const { carts: rows, page } = carts.list(req.query);
@@ -43,6 +47,11 @@ router.post("/:id/remind", requireAdmin, async (req, res) => {
   const cart = carts.getById(req.params.id);
   if (!cart) return res.status(404).json({ error: "No existe" });
   if (!cart.email) return res.status(400).json({ error: "Este carro no tiene email capturado" });
+  // Mandarle "dejaste algo en el carro" a alguien que ya pagó es el peor email
+  // posible. Un pago pendiente o rechazado sí se puede recordar.
+  if (cart.status === "converted") {
+    return res.status(409).json({ error: "Este carro ya terminó en una compra pagada" });
+  }
 
   const kind = req.body?.kind === "24h" ? "24h" : "1h";
   const template = kind === "24h" ? "cart_reminder_24h" : "cart_reminder_1h";

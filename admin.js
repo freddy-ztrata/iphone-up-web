@@ -35,7 +35,7 @@ function adminApp() {
     // Carritos abandonados
     carts: [],
     cartSummary: null,
-    cartQuery: { status: "", q: "", has_email: "", from: "", to: "" },
+    cartQuery: { status: "", payment: "", q: "", has_email: "", from: "", to: "" },
     cartPage: { total: 0, limit: 50, offset: 0, hasMore: false },
     loadingCarts: false,
     cartDrawer: { open: false, loading: false, cart: null, reminding: false },
@@ -121,11 +121,21 @@ function adminApp() {
     ],
 
     // Estados de carrito — mismos valores que el CHECK de la migración 007.
+    // Estado del CARRO. "Compró" es exclusivamente un pago aprobado por el
+    // webhook de MP — crear la preferencia o quedar en pending no lo es.
     CART_STATES: [
       { id: "active",    label: "Activo" },
       { id: "recovered", label: "Volvió por el link" },
-      { id: "converted", label: "Compró" },
+      { id: "converted", label: "Compró (pago aprobado)" },
       { id: "expired",   label: "Vencido" },
+    ],
+    // Estado del PAGO de la orden vinculada. Es información distinta del estado
+    // del carro: uno con pago pendiente sigue estando activo y recuperable.
+    CART_PAYMENTS: [
+      { id: "approved", label: "Pago aprobado" },
+      { id: "pending",  label: "Pago pendiente" },
+      { id: "rejected", label: "Pago rechazado" },
+      { id: "none",     label: "Sin intento de pago" },
     ],
     // Estados de email_log (server/migrations/007_emails_carts.sql).
     EMAIL_STATES: [
@@ -627,7 +637,7 @@ function adminApp() {
     },
 
     resetCartFilters() {
-      this.cartQuery = { status: "", q: "", has_email: "", from: "", to: "" };
+      this.cartQuery = { status: "", payment: "", q: "", has_email: "", from: "", to: "" };
       this.loadCarts();
     },
 
@@ -676,6 +686,28 @@ function adminApp() {
     },
 
     cartStateLabel(id) { return this.CART_STATES.find(s => s.id === id)?.label || id || "—"; },
+
+    // Pill de estado del carrito. El backend ya manda `status` normalizado
+    // contra la orden real, así que "Compró" solo aparece con pago aprobado.
+    // Los intermedios se muestran como lo que son — un pago que no terminó —
+    // para no confundirlos con una venta confirmada.
+    cartStatePill(c) {
+      if (!c) return { label: "—", cls: "" };
+      if (c.status === "converted") return { label: "Compró", cls: "cart-converted" };
+      if (c.paymentPending) return { label: "Pago pendiente", cls: "cart-pending" };
+      if (c.paymentRejected) return { label: "Pago rechazado", cls: "cart-rejected" };
+      return { label: this.cartStateLabel(c.status), cls: "cart-" + c.status };
+    },
+
+    // Texto de la orden vinculada en el drawer: sin esto, ver un ORD-… al lado
+    // de un carro activo se lee como "compró".
+    cartOrderLabel(c) {
+      if (!c?.orderId) return null;
+      if (c.status === "converted") return "Compra confirmada";
+      if (c.paymentPending) return "Pago iniciado, sin confirmar";
+      if (c.paymentRejected) return "Pago rechazado o cancelado";
+      return "Orden creada, sin pago";
+    },
 
     cartItemsLabel(cart) {
       const items = cart?.items || [];
@@ -1855,7 +1887,8 @@ function adminApp() {
         );
       }
       items.push(
-        { label: "Carritos sin comprar", hint: "Con email capturado", icon: "🛒", action: () => { this.cartQuery = { status: "active", q: "", has_email: "1", from: "", to: "" }; this.goto("carts"); } },
+        { label: "Carritos sin comprar", hint: "Con email capturado", icon: "🛒", action: () => { this.cartQuery = { status: "active", payment: "", q: "", has_email: "1", from: "", to: "" }; this.goto("carts"); } },
+        { label: "Carritos con pago pendiente", hint: "Empezaron a pagar y no terminaron", icon: "⏳", action: () => { this.cartQuery = { status: "", payment: "pending", q: "", has_email: "", from: "", to: "" }; this.goto("carts"); } },
       );
 
       // Cada modelo abre su editor; cada orden reciente abre su detalle.

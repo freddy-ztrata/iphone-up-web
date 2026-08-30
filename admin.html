@@ -573,9 +573,14 @@
             <div class="ac-kpi-meta">Se les puede escribir</div>
           </div>
           <div class="ac-kpi">
-            <div class="ac-kpi-label">Recuperados</div>
+            <div class="ac-kpi-label">Pago pendiente</div>
+            <div class="ac-kpi-value" x-text="cartSummary?.pending_payment || 0"></div>
+            <div class="ac-kpi-meta">Empezaron a pagar, sin confirmar</div>
+          </div>
+          <div class="ac-kpi">
+            <div class="ac-kpi-label">Compraron</div>
             <div class="ac-kpi-value" x-text="cartSummary?.converted || 0"></div>
-            <div class="ac-kpi-meta" x-text="(cartSummary?.recoveryRate || 0) + '% de los que dejaron email'"></div>
+            <div class="ac-kpi-meta" x-text="'Pago aprobado · ' + (cartSummary?.recoveryRate || 0) + '% de los que dejaron email'"></div>
           </div>
           <div class="ac-kpi">
             <div class="ac-kpi-label">Vencidos</div>
@@ -585,12 +590,18 @@
         </div>
 
         <div class="ac-filters">
-          <input class="ac-filter-search" type="search" placeholder="Buscar por email, nombre, producto o token…"
+          <input class="ac-filter-search" type="search" placeholder="Buscar por email, nombre, producto, token u orden…"
                  x-model="cartQuery.q" @input="searchCartsDebounced()" />
           <select class="ac-select" x-model="cartQuery.status" @change="loadCarts()">
             <option value="">Estado: todos</option>
             <template x-for="s in CART_STATES" :key="s.id">
               <option :value="s.id" x-text="'Estado: ' + s.label"></option>
+            </template>
+          </select>
+          <select class="ac-select" x-model="cartQuery.payment" @change="loadCarts()">
+            <option value="">Pago: todos</option>
+            <template x-for="p in CART_PAYMENTS" :key="p.id">
+              <option :value="p.id" x-text="p.label"></option>
             </template>
           </select>
           <select class="ac-select" x-model="cartQuery.has_email" @change="loadCarts()">
@@ -624,7 +635,7 @@
               </div>
               <div class="ac-td ac-cc-total ac-mono ac-ord-total" x-text="fmtCLP(c.subtotal)"></div>
               <div class="ac-td ac-cc-state">
-                <span class="ac-state-pill" :class="'cart-' + c.status" x-text="cartStateLabel(c.status)"></span>
+                <span class="ac-state-pill" :class="cartStatePill(c).cls" x-text="cartStatePill(c).label"></span>
                 <div class="ac-ord-sub ac-mono" x-show="c.orderId" x-text="c.orderId"></div>
               </div>
               <div class="ac-td ac-cc-rem">
@@ -1131,7 +1142,7 @@
     <template x-if="cartDrawer.cart && !cartDrawer.loading">
       <div class="ac-drawer-body">
         <div class="ac-order-pills">
-          <span class="ac-state-pill" :class="'cart-' + cartDrawer.cart.status" x-text="cartStateLabel(cartDrawer.cart.status)"></span>
+          <span class="ac-state-pill" :class="cartStatePill(cartDrawer.cart).cls" x-text="cartStatePill(cartDrawer.cart).label"></span>
           <span class="ac-role-pill" x-show="cartDrawer.cart.source" x-text="cartDrawer.cart.source"></span>
           <span class="ac-role-pill" x-show="!cartDrawer.cart.consent">Sin consentimiento</span>
         </div>
@@ -1142,7 +1153,9 @@
           <span>Nombre</span><strong x-text="cartDrawer.cart.name || '—'"></strong>
           <span>Email</span><strong x-text="cartDrawer.cart.email || 'No capturado'"></strong>
           <span x-show="cartDrawer.cart.phone">Teléfono</span><strong x-show="cartDrawer.cart.phone" x-text="cartDrawer.cart.phone"></strong>
-          <span x-show="cartDrawer.cart.orderId">Terminó en</span><strong class="ac-mono" x-show="cartDrawer.cart.orderId" x-text="cartDrawer.cart.orderId"></strong>
+          <span x-show="cartDrawer.cart.orderId">Orden vinculada</span><strong class="ac-mono" x-show="cartDrawer.cart.orderId" x-text="cartDrawer.cart.orderId"></strong>
+          <span x-show="cartDrawer.cart.orderId">Estado del pago</span>
+          <strong x-show="cartDrawer.cart.orderId" x-text="cartOrderLabel(cartDrawer.cart)"></strong>
         </div>
 
         <h3 class="ac-order-sec">Carro</h3>
@@ -1183,12 +1196,15 @@
 
         <div class="ac-order-cta" x-show="isAdmin">
           <button class="ac-btn-primary" @click="remindCart('1h')"
-                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email"
+                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email || cartDrawer.cart.status === 'converted'"
                   x-text="cartDrawer.reminding ? 'Enviando…' : 'Enviar 1er recordatorio'"></button>
           <button class="ac-btn-ghost" @click="remindCart('24h')"
-                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email">Enviar 2do recordatorio</button>
+                  :disabled="cartDrawer.reminding || !cartDrawer.cart.email || cartDrawer.cart.status === 'converted'">Enviar 2do recordatorio</button>
           <button class="ac-btn-danger" @click="deleteCart(cartDrawer.cart.id)">Borrar carrito</button>
         </div>
+        <p class="ac-edit-hint" x-show="cartDrawer.cart.status === 'converted'">
+          Este carro terminó en una compra con el pago aprobado: no corresponde mandarle recordatorios.
+        </p>
         <p class="ac-edit-hint" x-show="!cartDrawer.cart.email">
           Sin email capturado no hay a quién escribirle. El carrito queda solo como dato de analítica.
         </p>

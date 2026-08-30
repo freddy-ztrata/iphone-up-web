@@ -146,12 +146,16 @@ router.post("/preference", async (req, res) => {
       createdAt: new Date().toISOString(),
     });
 
-    // El carro capturado ya cumplió su función: queda fuera de la cola de
-    // recordatorios. Aislado en try/catch — un problema acá no puede impedir
-    // que el cliente llegue a pagar.
+    // Vinculamos el carro con la orden, pero NO lo damos por comprado: crear la
+    // preferencia es una intención de pago, no una venta. El cliente todavía no
+    // vio la pantalla de MP. El carro sigue activo y recuperable hasta que el
+    // webhook confirme `approved` (ahí se llama markConvertedByOrder).
+    //
+    // Aislado en try/catch — un problema acá no puede impedir que el cliente
+    // llegue a pagar.
     if (cartToken) {
-      try { cartsLib.markConverted(String(cartToken), orderId); }
-      catch (err) { console.error("[mp] no se pudo cerrar el carro capturado:", err.message); }
+      try { cartsLib.attachOrder(String(cartToken), orderId); }
+      catch (err) { console.error("[mp] no se pudo vincular el carro capturado:", err.message); }
     }
 
     res.json({
@@ -239,6 +243,15 @@ router.post("/webhook", async (req, res) => {
       transactionAmount: payment.transaction_amount,
       approvedAt: payment.date_approved,
     });
+
+    // ÚNICO punto del sistema donde un carro pasa a "compró". Va fuera del
+    // guard de `!wasApprovedBefore` a propósito: markConvertedByOrder() es
+    // idempotente por su propio WHERE, así que un webhook repetido no cambia
+    // nada y, si el primero falló, el reintento de MP lo repara solo.
+    if (payment.status === "approved") {
+      try { cartsLib.markConvertedByOrder(externalRef); }
+      catch (err) { console.error("[mp webhook] no se pudo cerrar el carro:", err.message); }
+    }
 
     // Si el pago acaba de ser aprobado, descontar stock e incrementar cupón.
     if (payment.status === "approved" && !wasApprovedBefore) {

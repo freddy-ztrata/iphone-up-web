@@ -101,6 +101,9 @@ router.get("/cart/:token", restoreLimiter, (req, res) => {
   if (cart.status === "expired" || new Date(cart.expiresAt.replace(" ", "T") + "Z") <= new Date()) {
     return res.status(410).json({ error: "Este carro venció", expired: true });
   }
+  // `status` viene normalizado contra la orden real: solo es 'converted' con el
+  // pago APROBADO. Un carro que quedó en pending/rejected se restaura normal —
+  // es justo el cliente al que queremos devolverle el carro para reintentar.
   if (cart.status === "converted") {
     return res.status(409).json({ error: "Este carro ya terminó en una compra", converted: true });
   }

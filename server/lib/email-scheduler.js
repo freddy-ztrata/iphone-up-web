@@ -2,11 +2,16 @@
 // cola externa: el volumen de la tienda son decenas de correos por día, no
 // miles, y una dependencia nueva costaría más que lo que resuelve.
 //
-// Cada tick hace cuatro cosas, todas idempotentes:
+// Cada tick hace cinco cosas, todas idempotentes:
+//   0. Normaliza los carros marcados como comprados sin pago aprobado.
 //   1. Vence los carros pasados de fecha (14 días por default).
 //   2. Manda el 1er recordatorio de carro abandonado (1h por default).
 //   3. Manda el 2do (24h por default).
 //   4. Manda el follow-up a N días de la ENTREGA (7 por default).
+//
+// Un carro con pago APROBADO nunca recibe recordatorios (ya compró); uno con
+// pago pendiente o rechazado sí, porque sigue siendo una venta a recuperar. El
+// filtro vive en carts.dueForReminder() y corre sobre el estado efectivo.
 //
 // La idempotencia real vive en dos lugares: las columnas reminder_*_sent_at de
 // `carts` y el UNIQUE de email_log.idempotency_key. Si el proceso muere en la
@@ -120,10 +125,16 @@ async function sendFollowups(config) {
 async function tick() {
   if (running) return { skipped: true, reason: "tick anterior en curso" };
   running = true;
-  const out = { expired: 0, reminders1h: 0, reminders24h: 0, followups: 0, errors: [] };
+  const out = { repaired: 0, expired: 0, reminders1h: 0, reminders24h: 0, followups: 0, errors: [] };
 
   try {
     const config = settings.getEmailConfig();
+
+    // Antes que nada: devolver a la cola de recuperación los carros que quedaron
+    // marcados como comprados sin venta detrás. Idempotente — después del primer
+    // tick que los limpia, no matchea nada nunca más.
+    try { out.repaired = carts.repairFalseConversions(); }
+    catch (err) { out.errors.push(`repair: ${err.message}`); }
 
     try { out.expired = carts.expireOld(); }
     catch (err) { out.errors.push(`expire: ${err.message}`); }
@@ -148,9 +159,9 @@ async function tick() {
     }
 
     lastRun = { at: new Date().toISOString(), ...out };
-    const moved = out.expired + out.reminders1h + out.reminders24h + out.followups;
+    const moved = out.repaired + out.expired + out.reminders1h + out.reminders24h + out.followups;
     if (moved > 0 || out.errors.length) {
-      console.log(`[emails] tick: ${out.reminders1h} × 1h, ${out.reminders24h} × 24h, ${out.followups} follow-ups, ${out.expired} vencidos` +
+      console.log(`[emails] tick: ${out.reminders1h} × 1h, ${out.reminders24h} × 24h, ${out.followups} follow-ups, ${out.expired} vencidos, ${out.repaired} normalizados` +
         (out.errors.length ? ` — ${out.errors.length} error(es)` : ""));
     }
     return out;

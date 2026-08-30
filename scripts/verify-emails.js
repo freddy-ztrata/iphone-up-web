@@ -848,6 +848,10 @@ async function main() {
 
   check("convertir el carro lo saca de la cola para siempre", () => {
     db.prepare("UPDATE carts SET reminder_1h_sent_at = NULL, reminder_24h_sent_at = NULL WHERE id = ?").run(cartId);
+    // markConverted() exige que la orden esté `approved` en la DB: un carro solo
+    // se da por comprado si hay una venta real detrás. El fixture vivía solo en
+    // memoria (se usaba para renderizar templates), así que hay que persistirlo.
+    storage.saveOrder(order);
     carts.markConverted(cartToken, "ORD-VERIFY-1");
     const c = carts.getByToken(cartToken);
     assertEq(c.status, "converted");
